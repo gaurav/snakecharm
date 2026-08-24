@@ -37,12 +37,13 @@ PyCharm Professional. Note that **2025.2 is the last standalone PyCharm Communit
 
 **Wrappers bundle:** `:buildWrappersBundle` reads `snakemakeWrappersRepoPath` (a local
 [snakemake-wrappers](https://github.com/snakemake/snakemake-wrappers) checkout) and runs as part of
-`prepareSandbox`, so it sits in front of `buildPlugin`, `runIde` **and** the test tasks. The property
-`snakemakeWrappersRepoPath` is unset by default in `gradle.properties` so the plugin bundle and local IDE
-run will not provide wrappers related completion and other features until the variable is set in properties
-or using cmdline like `./gradlew buildPlugin -PsnakemakeWrappersRepoPath=/path/to/snakemake-wrappers`. 
-The test-only bundle (`:buildTestWrappersBundle`, what `test` actually consumes) reads by default
-`testData/wrappers_storage` and needs no property. 
+`prepareSandbox`, so it sits in front of `buildPlugin`, `runIde` **and** the test tasks. That
+property is commented out in `gradle.properties` by default, so a plain `buildPlugin` / `runIde`
+yields a plugin without wrapper completion and the other wrapper-driven features; pass it explicitly
+to include them: `./gradlew buildPlugin -PsnakemakeWrappersRepoPath=/path/to/snakemake-wrappers` (on
+TeamCity it comes from the wrappers VCS root — see issue #571). The test-only bundle
+(`:buildTestWrappersBundle`, what `test` actually consumes) defaults to `testData/wrappers_storage`
+and needs no property.
 
 **CLI build memory:** if `:compileKotlin` dies with `OutOfMemoryError: GC overhead limit exceeded`,
 give the Kotlin daemon more heap — append `-Pkotlin.daemon.jvmargs=-Xmx4g` (transforming some large
@@ -56,9 +57,9 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
 
 - **Run one feature:** add a `@here` tag above its `Feature:` line (or above a single `Scenario:` /
   `Scenario Outline:`) and set `tags = "not @ignore and @here"` in `AllCucumberFeaturesTest.kt`;
-  revert both afterwards. Once #577 lands, the runner edit is unnecessary — `test` forwards
-  `CUCUMBER_TAGS='@here'` to cucumber's `cucumber.filter.tags`, which overrides the annotation. Worth
-  the trouble either way: it turns a 25-minute suite into a ~60-second one.
+  revert both afterwards. If PR #577 lands, the runner edit becomes unnecessary — `test` there
+  forwards `CUCUMBER_TAGS='@here'` to cucumber's `cucumber.filter.tags`, which overrides the
+  annotation. Worth the trouble either way: it turns a 25-minute suite into a ~60-second one.
 - **Scenarios share one project.** The light fixture's descriptor is cached (it has to be on 2026.2 —
   a per-scenario mock SDK collides on symbolic id), so project *services* survive into the next
   scenario. A step that wants project state — framework enabled/disabled, settings, SDK — must set it
@@ -75,15 +76,17 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   absent on a clean checkout — the *unversioned* `Given a snakemake project` scenarios (~135) then
   fail because `resolveQualifiedName("snakemake")` returns `[]`, while the checked-in per-version
   mocks (`MockPackages3_smk_<ver>`) still resolve. Provision it (see `DEVELOPER.md` → Configure Tests,
-  step 2): symlink` snakemake` to **`src/snakemake`** (https://github.com/snakemake/snakemake, checkout
-  desired version using repo tags) to `testData/MockPackages3/snakemake`. 
-  **Two traps that make a correct fixture look like it does nothing:** the version must match
-  `snakemake_api.yaml`'s `defaultVersion` (e.g. 9.9.0), and the test IDE
-  sandbox persists a VFS/index under `.sandbox_pycharm/<ide>/system-test/` that **`cleanTest` doesn't
-  clear** — if you add the fixture after a prior run, `rm -rf .sandbox_pycharm/*/system-test` once. If
-  you see a wall of `snakemake`-resolution failures on a fresh checkout, suspect this fixture, **not**
-  your change. (Full write-up: PR #574.)
-- **Analyzing results:** the full suite is large (~3200 scenarios; a full `test` run takes a while —
+  step 2): point `testData/MockPackages3/snakemake` at the `src/snakemake` package of a
+  [snakemake](https://github.com/snakemake/snakemake) checkout, at the release tag you want.
+  **Two traps that make a correct fixture look like it does nothing:** the checkout must be at the
+  version `snakemake_api.yaml` declares as `defaultVersion` (currently 9.9.0), and the test IDE
+  sandbox persists a VFS/index under `.sandbox_pycharm/**/system-test/` that **`cleanTest` doesn't
+  clear** — after adding the fixture to an already-tested checkout, remove it once with
+  `find .sandbox_pycharm -maxdepth 3 -name system-test -exec rm -rf {} +` (its depth varies with
+  how the tests were launched, so a fixed glob can silently match nothing). If you see a wall of
+  `snakemake`-resolution failures on a fresh checkout, suspect this fixture, **not** your change.
+  (Full write-up: PR #574.)
+- **Analyzing results:** the full suite is large (~3400 scenarios; a full `test` run takes a while —
   prefer the single-feature `@here` recipe while iterating). To triage or diff failures, parse
   `build/test-results/test/TEST-*.xml`: each `<testcase>` with a `<failure>`/`<error>` child is a
   failing scenario (name = `<feature> > <scenario> [#example]`).
@@ -104,15 +107,16 @@ Two languages, both layered onto the Python plugin:
    `"results/sample_{genome}.bam"`. Lives under `stringLanguage/`, lexer generated from
    `stringLanguage/lang/parser/smk_sl.flex` (JFlex), injected into Python string literals.
 
-SnakemCharm plugin features are based on the sources of the snakemake project 
-(https://github.com/snakemake/snakemake) so the plugin tries to do maximum static analysis of the underlying 
-snakemake python code. Due to the highly dynamic implementation of a snakemake framework the SnakeCharm 
-provides API descriptions of the implicit python api available in different blocks of Snakemake DSL. 
-Additionally, API changes among different snakemake versions, so snakemake version is considered 
-as `language level`. File `snakemake_api.yaml` (loaded by SnakemakeApiYamlAnnotationsService into project level
-`com.jetbrains.snakecharm.codeInsight.SnakemakeApiService` service class) describes API changes among 
-different snakemake versions. Key `defaultVersion` (e.g. 9.9.0) sets the default language level for the new 
- projects, and it is the latest language level officially supported by the plugin.
+Plugin features are derived from the sources of the
+[snakemake project](https://github.com/snakemake/snakemake), so SnakeCharm does as much static
+analysis of the underlying snakemake Python code as it can. Because the framework itself is highly
+dynamic, the plugin additionally ships descriptions of the implicit Python API available in each
+block of the Snakemake DSL. That API changes between snakemake releases, so the snakemake version is
+treated as a **language level**: `snakemake_api.yaml` at the repo root (loaded by
+`SnakemakeApiYamlAnnotationsService` into the project-level
+`com.jetbrains.snakecharm.codeInsight.SnakemakeApiService`) records the differences between
+versions. Its `defaultVersion` key (currently 9.9.0) is the language level new projects get, and the
+latest one the plugin officially supports.
 
 Feature areas (each maps to a source package and a `features/` test dir):
 
@@ -123,7 +127,8 @@ Feature areas (each maps to a source package and a `features/` test dir):
   "runtime magic" symbols (`expand`, `temp`, `config`, `rules`, …) are built by
   `SmkImplicitPySymbolsProvider`, which resolves them by qualified name against the project SDK's
   snakemake package.
-- `inspections/` — ~56 local inspections for common Snakemake mistakes.
+- `inspections/` — ~45 local inspections (`<localInspection>` entries in `plugin.xml`) for common
+  Snakemake mistakes.
 - `framework/` — Snakemake framework detection: locating the `snakemake` package via the project
   SDK / package manager, which gates most features and drives version-specific behaviour.
 - `lang/structureView/`, `lang/documentation/`, `lang/formatter/`, `spellchecker/`, `actions/` —
