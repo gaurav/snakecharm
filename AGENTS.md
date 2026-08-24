@@ -60,12 +60,19 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   revert both afterwards. If PR #577 lands, the runner edit becomes unnecessary — `test` there
   forwards `CUCUMBER_TAGS='@here'` to cucumber's `cucumber.filter.tags`, which overrides the
   annotation. Worth the trouble either way: it turns a 25-minute suite into a ~60-second one.
-- **Scenarios share one project.** The light fixture's descriptor is cached (it has to be on 2026.2 —
-  a per-scenario mock SDK collides on symbolic id), so project *services* survive into the next
-  scenario. A step that wants project state — framework enabled/disabled, settings, SDK — must set it
-  explicitly; it cannot rely on a fresh project's defaults. `Given a snakemake with disabled framework
-  project` broke exactly this way, and the scenario that depended on it stayed green for years only
-  because a second bug happened to cancel it out.
+- **Scenario isolation is thinner than it looks.** Every scenario asks IntelliJ's light-fixture
+  framework for a test project by handing it a `LightProjectDescriptor` — the object that says
+  which Python SDK and library roots the project needs. The framework hands back the *same* project
+  as long as it is given the same descriptor, and rebuilds it when the descriptor changes. On `master`
+  `StepDefs` constructs a fresh descriptor per scenario, so scenarios are mostly insulated from each
+  other by accident. #577 has to cache descriptors instead — on 2026.2 an SDK is a workspace-model
+  entity, so building a second mock SDK with the same name logs "symbolic id already exists", which
+  `TestLoggerFactory` turns into ~1070 failed scenarios. Once the project is shared, everything held
+  by a project-level *service* — framework enabled/disabled, settings, the configured SDK — survives
+  into the next scenario. **Write steps that set the project state they need rather than assume a
+  fresh project's defaults.** `Given a snakemake with disabled framework project` is the cautionary
+  example: it never disabled anything, it only skipped the enabling, and it passed for years purely
+  because each scenario used to start from a clean project.
 - **`testData` is NOT a declared input of the `test` task.** After editing any feature or
   test-data file, run `./gradlew cleanTest test` — plain `test` may serve stale cached results.
 - Test data lives in `testData/`. Snakemake API is mocked per-version under
@@ -86,8 +93,9 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   how the tests were launched, so a fixed glob can silently match nothing). If you see a wall of
   `snakemake`-resolution failures on a fresh checkout, suspect this fixture, **not** your change.
   (Full write-up: PR #574.)
-- **Analyzing results:** the full suite is large (~3400 scenarios; a full `test` run takes a while —
-  prefer the single-feature `@here` recipe while iterating). To triage or diff failures, parse
+- **Analyzing results:** the suite is large — ~3250 Cucumber scenarios plus ~170 plain JUnit tests,
+  around 25 minutes for a full `test` run, so prefer the single-feature `@here` recipe while
+  iterating. To triage or diff failures, parse
   `build/test-results/test/TEST-*.xml`: each `<testcase>` with a `<failure>`/`<error>` child is a
   failing scenario (name = `<feature> > <scenario> [#example]`).
 
@@ -156,11 +164,11 @@ the entry class for any feature is to grep that file.
   platform's bytecode target (2026.2 emits Java 25, so javac 21 reports "bad class file … wrong
   version 69.0"); and the **`intelliJPlatform` gradle-plugin version** decides whether the Python
   plugin's v2 content modules load *in tests* at all (2.16.0 → 2.18.1 took one port from 3361 failing
-  scenarios to 1153). Check all three before debugging your own code.
+  tests, of ~3400, down to 1153). Check all three before debugging your own code.
 - **Logged errors are test failures.** `TestLoggerFactory` promotes anything logged at error level to
   a failed scenario, so one benign platform log can fail hundreds of unrelated tests. When triaging a
   wall of failures, group by exception message first — it is usually one cause, not many.
-- **Platform-bump gotcha:** since 2025.2+ the platform is modular — APIs, inspections, and extension
+- **Platform-bump gotcha:** since 2025.2 the platform is modular — APIs, inspections, and extension
   points that used to live in *core* have been split into separate modules / bundled plugins with
   their own classloaders. If a class or EP that worked before goes missing after a bump (often only
   visible in tests), declare it explicitly with `bundledModule("…")` / `bundledPlugin("…")` in
