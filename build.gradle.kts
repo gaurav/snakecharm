@@ -289,8 +289,10 @@ tasks {
         //
         // On CI the property is mandatory. A dropped TeamCity parameter would otherwise publish a
         // wrapper-less plugin from a green build, with nothing but a warning in the log. Checked when
-        // the task graph is ready, not in onlyIf: Gradle hides the message of an onlyIf failure.
-        if (providers.environmentVariable("TEAMCITY_VERSION").isPresent && wrappersRepoPath == null) {
+        // the task graph is ready, not in onlyIf: Gradle hides the message of an onlyIf failure. Blank
+        // counts as unset here: an unresolved TeamCity parameter arrives as an empty string, and an empty
+        // path resolves to the daemon working directory, which the crawler may well accept.
+        if (providers.environmentVariable("TEAMCITY_VERSION").isPresent && wrappersRepoPath.isNullOrBlank()) {
             gradle.taskGraph.whenReady {
                 if (hasTask(":buildWrappersBundle")) {
                     throw GradleException(
