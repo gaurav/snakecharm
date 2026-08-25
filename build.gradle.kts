@@ -327,8 +327,8 @@ tasks {
     register<JavaExec>("buildTestWrappersBundle") {
         // XXX: we could re-use wrappers bundle task for production here and just pass:
         //  `-PsnakemakeWrappersRepoPath=testData/wrappers_storage' gradle arg
-        // P.S: tests never run the production bundle task -- they go through prepareTestSandbox, which
-        // depends on this one instead.
+        // P.S: tests never run the production bundle task -- the `test` task depends on this one directly,
+        // and tests read the .cbor from build/bundledWrappers.
 
         // Builds storage based on test data
         dependsOn("compileKotlin", "compileJava")
