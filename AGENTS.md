@@ -37,7 +37,8 @@ PyCharm Professional. Note that **2025.2 is the last standalone PyCharm Communit
 
 **Wrappers bundle:** `:buildWrappersBundle` reads `snakemakeWrappersRepoPath` (a local
 [snakemake-wrappers](https://github.com/snakemake/snakemake-wrappers) checkout) and runs as part of
-`prepareSandbox`, so it sits in front of `buildPlugin`, `runIde` **and** the test tasks. That
+`prepareSandbox`, so it sits in front of `buildPlugin` and `runIde` — but **not** the test tasks,
+which route through `prepareTestSandbox` and the separate test bundle below. That
 property is commented out in `gradle.properties` by default, so a plain `buildPlugin` / `runIde`
 yields a plugin without wrapper completion and the other wrapper-driven features; pass it explicitly
 to include them: `./gradlew buildPlugin -PsnakemakeWrappersRepoPath=/path/to/snakemake-wrappers` (on
