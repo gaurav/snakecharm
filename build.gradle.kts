@@ -279,10 +279,25 @@ tasks {
         // CI provides one. When the property is unset, skip with a warning instead of failing
         // buildPlugin/verifyPlugin for contributors who don't have it. See issue #571.
         //
-        // Skip only when it is *unset*. If it is set but wrong (a typo, or a renamed CI checkout) the
-        // task still runs and SmkWrapperCrawler fails loudly, as before -- silently publishing a plugin
-        // with no wrapper metadata is a much worse outcome than a broken build.
-        val wrappersRepoPath = gradlePropertyOptional("snakemakeWrappersRepoPath")?.takeIf { it.isNotBlank() }
+        // Skip only when it is *unset*. If it is set but wrong -- a typo, an empty value, or a renamed
+        // CI checkout -- the task still runs and SmkWrapperCrawler fails loudly, as before: silently
+        // publishing a plugin with no wrapper metadata is a much worse outcome than a broken build.
+        //
+        // On CI the property is mandatory. A dropped TeamCity parameter would otherwise publish a
+        // wrapper-less plugin from a green build, with nothing but a warning in the log. Checked when
+        // the task graph is ready, not in onlyIf: Gradle hides the message of an onlyIf failure.
+        val wrappersRepoPath = gradlePropertyOptional("snakemakeWrappersRepoPath")
+        if (providers.environmentVariable("TEAMCITY_VERSION").isPresent && wrappersRepoPath == null) {
+            gradle.taskGraph.whenReady {
+                if (hasTask(":buildWrappersBundle")) {
+                    throw GradleException(
+                        "snakemakeWrappersRepoPath is not set on CI. Refusing to build a plugin without " +
+                            "bundled wrappers -- check the snakemake-wrappers VCS root and the parameter " +
+                            "that passes its path to Gradle. See #571."
+                    )
+                }
+            }
+        }
         val wrappersBundleFile = layout.buildDirectory.file("bundledWrappers/smk-wrapper-storage-bundled.cbor")
         onlyIf {
             if (wrappersRepoPath == null) {
