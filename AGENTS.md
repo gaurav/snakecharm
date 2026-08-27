@@ -93,7 +93,9 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   `find .sandbox_pycharm -maxdepth 3 -name system-test -exec rm -rf {} +` (its depth varies with
   how the tests were launched, so a fixed glob can silently match nothing). If you see a wall of
   `snakemake`-resolution failures on a fresh checkout, suspect this fixture, **not** your change.
-  (Full write-up: PR #574.)
+  (Full write-up: PR #574.) Clearing it is **not free** — the next run re-indexes from scratch, and a
+  full `cleanTest test` straight afterwards took **1h24m** on 2026.1. Clear it when the fixture
+  actually changed, not as a routine "start clean".
 - **Analyzing results:** the suite is large — ~3250 Cucumber scenarios plus ~170 plain JUnit tests,
   around 25 minutes for a full `test` run, so prefer the single-feature `@here` recipe while
   iterating. To triage or diff failures, parse
