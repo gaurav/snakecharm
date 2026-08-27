@@ -132,12 +132,13 @@ If you get `Unimplemented substep definition` in all `*.feature` files, ensure:
 
   ```shell
   ./gradlew test 2>&1 | tee /tmp/after.log
-  grep ' FAILED$' /tmp/after.log | grep ' > ' | sed 's/ FAILED$//' | sort -u > /tmp/after.names
+  sed -n '/ > /s/ FAILED$//p' /tmp/after.log | sort -u > /tmp/after.names
   diff /tmp/before.names /tmp/after.names
   ```
 
-  The `grep ' > '` is what drops Gradle's own `> Task :test FAILED` line, which has no space before
-  its `>`. Check the resulting line count against the `M failed` in the summary.
+  The `/ > /` address keeps only scenario lines, skipping Gradle's own `> Task :test FAILED` (no
+  space before its `>`); `-n` with the `p` flag then prints just the lines the substitution changed.
+  Check the resulting line count against the `M failed` in the summary.
 
 **Update to new Platform API:**
 * Inspect libs version in `gradle/libs.versions.toml`, especially `intelliJPlatform` and `kotlin` version. Also `javaVersion` and `gradleVersion` in `gradle.properties`
