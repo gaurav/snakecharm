@@ -96,9 +96,9 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   (Full write-up: PR #574.) Clearing it is **not free** — the next run re-indexes from scratch, and a
   full `cleanTest test` straight afterwards took **1h24m** on 2026.1. Clear it when the fixture
   actually changed, not as a routine "start clean".
-- **Analyzing results:** the suite is large — ~3250 Cucumber scenarios plus ~170 plain JUnit tests,
-  around 25 minutes for a full `test` run, so prefer the single-feature `@here` recipe while
-  iterating. Gradle prints each failing scenario and a `N tests completed, M failed` summary, so tee
+- **Analyzing results:** the suite is large — ~3250 Cucumber scenarios plus ~170 plain JUnit tests.
+  Budget around 25 minutes for a warm full `test` run, and far longer if the sandbox VFS was cleared
+  (see above: 1h24m measured). Either way, prefer the single-feature `@here` recipe while iterating. Gradle prints each failing scenario and a `N tests completed, M failed` summary, so tee
   the log and reduce it rather than parsing anything: `sed -n '/ > /s/ FAILED$//p' log | sort -u`
   gives a sorted list you can `diff` between two runs (the `/ > /` address skips Gradle's own
   `> Task :test FAILED`). Check the line count against `M failed`. See
