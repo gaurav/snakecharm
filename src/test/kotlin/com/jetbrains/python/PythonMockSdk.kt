@@ -105,7 +105,7 @@ object PythonMockSdk {
      * Creating the mock SDK triggers `PyTypeShed`'s lazy init, which calls
      * `PythonHelpersLocator.getHelpersRoots()` — that iterates every registered locator with no
      * exception guard. The obfuscated Pro locator's `getRoot()` calls `getPluginDistDirByClass`, which
-     * throws `IllegalStateException: .../plugins/python/lib/modules should be lib directory` because the
+     * throws `IllegalStateException: .../plugins/python-ce/lib/modules should be lib directory` because the
      * unified 2026.1 Python plugin ships its code as v2 content modules under `lib/modules/` rather than
      * directly under `lib/`. That is purely a gradle-test-sandbox artifact (the flattened test classpath
      * means the plugin classes aren't under a `PluginAwareClassLoader`, so the safe branch of

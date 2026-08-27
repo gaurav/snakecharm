@@ -15,9 +15,9 @@ Released <Unreleased>
 
 ### Changed
 - Adapted to the restructured Python plugin API in 2026.1: `PyType` is now a Kotlin interface (`name`
-  and `isBuiltin` are properties, `name` is nullable, and `getCompletionVariants` takes a nullable
-  completion prefix), and `CustomFoldingBuilder.buildLanguageFoldRegions` now takes a nullable-element
-  descriptor list.
+  and `isBuiltin` are properties, `name` is nullable, and `getCompletionVariants` takes a non-null
+  `ProcessingContext` and returns `Array<out Any>`), and `CustomFoldingBuilder.buildLanguageFoldRegions`
+  now takes a nullable-element descriptor list.
 - The `com.jetbrains.python.validation.ReturnAnnotator` extension point was removed; its
   "return outside of function" check moved into the final `PySyntaxAnnotator`. The false positive for
   `return` inside snakemake `run:` / `onstart` / `onerror` / `onsuccess` blocks is now suppressed by a
