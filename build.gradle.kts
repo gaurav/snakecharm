@@ -223,12 +223,14 @@ intellijPlatform {
         ides {
             // releases based on since/until builds
             recommended()
-            // EAP snapshots
+            // EAP snapshots, over the same range the manifest claims. Hardcoding a wider range here
+            // makes `verifyPlugin` fail against IDEs that could never install the plugin: the verifier
+            // honours this list, not pluginSinceBuild/pluginUntilBuild.
             select {
                 types = listOf(IntelliJPlatformType.PyCharmProfessional)
                 channels = listOf(ProductRelease.Channel.EAP, ProductRelease.Channel.RELEASE)
-                sinceBuild = "242"
-                untilBuild = "301.*"
+                sinceBuild = gradleProperty("pluginSinceBuild")
+                untilBuild = gradleProperty("pluginUntilBuild")
             }
         }
     }
