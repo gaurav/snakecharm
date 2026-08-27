@@ -276,6 +276,10 @@ kotlin {
     }
 }
 
+// The production wrappers bundle needs a local snakemake-wrappers checkout (see DEVELOPER.md); CI
+// provides one. Read once here so both `buildWrappersBundle` and `prepareSandbox` gate on it. See #571.
+val wrappersRepoPath = gradlePropertyOptional("snakemakeWrappersRepoPath")?.takeIf { it.isNotBlank() }
+
 tasks {
 
     runIde {
@@ -308,15 +312,12 @@ tasks {
                 configurations[Configurations.INTELLIJ_PLATFORM_TEST_CLASSPATH]
         enableAssertions = true
 
-        // The production wrappers bundle needs a local snakemake-wrappers checkout (see DEVELOPER.md);
-        // CI provides one. When the property is unset, skip with a warning instead of failing
-        // buildPlugin/verifyPlugin for contributors who don't have it. See issue #571.
+        // When the property is unset, skip with a warning instead of failing buildPlugin/verifyPlugin
+        // for contributors who don't have a snakemake-wrappers checkout. See issue #571.
         //
         // Skip only when it is *unset*. If it is set but wrong (a typo, or a renamed CI checkout) the
         // task still runs and SmkWrapperCrawler fails loudly, as before -- silently publishing a plugin
         // with no wrapper metadata is a much worse outcome than a broken build.
-        val wrappersRepoPath = gradlePropertyOptional("snakemakeWrappersRepoPath")?.takeIf { it.isNotBlank() }
-        val wrappersBundleFile = layout.buildDirectory.file("bundledWrappers/smk-wrapper-storage-bundled.cbor")
         onlyIf {
             if (wrappersRepoPath == null) {
                 logger.warn(
@@ -325,9 +326,6 @@ tasks {
                         "name completion will be unavailable). " +
                         "Pass -PsnakemakeWrappersRepoPath=<snakemake-wrappers checkout> to include them. See #571."
                 )
-                // Drop a bundle left by an earlier run that did have the property, so prepareSandbox
-                // cannot pack a stale one whose embedded repo version disagrees with gradle.properties.
-                wrappersBundleFile.get().asFile.delete()
             }
             wrappersRepoPath != null
         }
@@ -366,11 +364,15 @@ tasks {
 
 
     prepareSandbox {
-        // Pack wrappers bundle into plugin:
-        dependsOn("buildWrappersBundle")
-
-        from(layout.buildDirectory.file("bundledWrappers/smk-wrapper-storage-bundled.cbor")) {
-            into(pluginName.map { "$it/extra" })
+        // Pack wrappers bundle into plugin, but only when this build actually produced one. Gating
+        // here (rather than deleting a stale bundle from buildWrappersBundle's onlyIf) also covers
+        // `-x buildWrappersBundle`, where that task's spec is never evaluated: without this, a bundle
+        // left by an earlier run that did have the property would be packed with a repo version that
+        // disagrees with gradle.properties.
+        if (wrappersRepoPath != null) {
+            from(layout.buildDirectory.file("bundledWrappers/smk-wrapper-storage-bundled.cbor")) {
+                into(pluginName.map { "$it/extra" })
+            }
         }
         from(layout.projectDirectory.file("snakemake_api.yaml")) {
             into(pluginName.map { "$it/extra" })
