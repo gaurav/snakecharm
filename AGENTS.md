@@ -99,9 +99,9 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
 - **Analyzing results:** the suite is large — ~3250 Cucumber scenarios plus ~170 plain JUnit tests,
   around 25 minutes for a full `test` run, so prefer the single-feature `@here` recipe while
   iterating. Gradle prints each failing scenario and a `N tests completed, M failed` summary, so tee
-  the log and reduce it rather than parsing anything: `grep ' FAILED$' log | grep ' > ' |
-  sed 's/ FAILED$//' | sort -u` gives a sorted list you can `diff` between two runs (the second
-  `grep` drops Gradle's own `> Task :test FAILED`). Check the line count against `M failed`. See
+  the log and reduce it rather than parsing anything: `sed -n '/ > /s/ FAILED$//p' log | sort -u`
+  gives a sorted list you can `diff` between two runs (the `/ > /` address skips Gradle's own
+  `> Task :test FAILED`). Check the line count against `M failed`. See
   DEVELOPER.md → "Reading test results". The JUnit XML under `build/test-results/test/` holds the
   same information if you need a run whose console output you no longer have.
 
