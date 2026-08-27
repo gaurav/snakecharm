@@ -157,6 +157,13 @@ the entry class for any feature is to grep that file.
   [build-number-ranges](https://plugins.jetbrains.com/docs/intellij/build-number-ranges.html)
   (`2025.2`=`252`, `2026.1`=`261`, …). `DEVELOPER.md` → "Update to new Platform API" is the
   checklist for a platform bump.
+- **`verifyPlugin` verifies whatever `pluginVerification.ides` lists — not what the manifest claims.**
+  Raising `pluginSinceBuild` does not narrow it. That list is bound to
+  `pluginSinceBuild`/`pluginUntilBuild` in `build.gradle.kts` so a bump carries the verifier with it;
+  don't re-hardcode a range there or the task starts failing against IDEs that can no longer install
+  the plugin. The task also exits non-zero on `INTERNAL_API_USAGES`, which this codebase has had for
+  years — read the per-IDE `verification-verdict.txt` under `build/reports/pluginVerifier/` rather
+  than trusting the exit code.
 - **A platform bump moves more than `platformVersion`.** Three toolchain baselines can move with it,
   and each fails *before* your source is even considered, with an error that doesn't name the cause:
   the **Kotlin compiler** must be new enough to read the platform's metadata (a compiler reads
