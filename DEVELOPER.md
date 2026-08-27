@@ -85,6 +85,23 @@ If you get `Unimplemented substep definition` in all `*.feature` files, ensure:
   * Not installed or disabled: `Substeps IntelliJ Plugin` 
   * Plugins installed: `Cucumber Java`, `Gherkin`
 
+**Reading test results:**
+* `./gradlew test` prints a line per failing scenario as it goes, then a `N tests completed, M failed`
+  summary. For a run you are watching, that is the report.
+* HTML reports are turned off in `build.gradle.kts` (Windows cannot handle some Cucumber scenario
+  names), so what a finished run leaves on disk is the JUnit XML under `build/test-results/test/`.
+* To see what a change fixed or broke, compare two runs. Capture each log and reduce it to a sorted
+  list of scenario names:
+
+  ```shell
+  ./gradlew test 2>&1 | tee /tmp/after.log
+  grep ' FAILED$' /tmp/after.log | grep ' > ' | sed 's/ FAILED$//' | sort -u > /tmp/after.names
+  diff /tmp/before.names /tmp/after.names
+  ```
+
+  The `grep ' > '` is what drops Gradle's own `> Task :test FAILED` line, which has no space before
+  its `>`. Check the resulting line count against the `M failed` in the summary.
+
 **Update to new Platform API:**
 * Inspect libs version in `gradle/libs.versions.toml`, especially `intelliJPlatform` and `kotlin` version. Also `javaVersion` and `gradleVersion` in `gradle.properties`
   * See [GitHub:intellij-platform-gradle-plugin](https://github.com/JetBrains/intellij-platform-gradle-plugin) documentation and [GitHub:intellij-platform-plugin-template](https://github.com/JetBrains/intellij-platform-plugin-template) as plugin example
