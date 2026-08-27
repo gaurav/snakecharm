@@ -57,6 +57,14 @@
       ln -sfn ~/snakemake/src/snakemake testData/MockPackages3/snakemake
     ```
 
+   Check the result before running the suite — the `&&` chain means `ln` never runs if the git steps
+   fail, and both a leftover broken symlink and a directory that swallowed the link (`ln` into a real
+   directory creates `snakemake/snakemake` and exits 0) look like a provisioned fixture:
+
+    ```shell
+    ls -l testData/MockPackages3/snakemake/__init__.py
+    ```
+
    If `defaultVersion` changes later, re-point the fixture the same way — the FQN tests will fail
    against a stale checkout.
 
@@ -66,8 +74,9 @@
    after provisioning the fixture:
 
     ```shell
-    # 2>/dev/null: the sandbox does not exist yet if you have not run the tests
-    find .sandbox_pycharm -maxdepth 3 -name system-test -exec rm -rf {} + 2>/dev/null
+    # guarded rather than 2>/dev/null: the sandbox does not exist until you have run the tests once,
+    # but a removal that genuinely fails must not be silenced -- that lands you right back here
+    [ -d .sandbox_pycharm ] && find .sandbox_pycharm -maxdepth 3 -name system-test -exec rm -rf {} +
     ```
 
    Use `find`, not `rm -rf .sandbox_pycharm/*/system-test`: the sandbox sits at a different depth
@@ -94,14 +103,17 @@ If you get `Unimplemented substep definition` in all `*.feature` files, ensure:
   list of scenario names:
 
   ```shell
-  ./gradlew test 2>&1 | tee /tmp/after.log
+  ./gradlew cleanTest test 2>&1 | tee /tmp/after.log
   sed -n '/ > /s/ FAILED$//p' /tmp/after.log | sort -u > /tmp/after.names
   diff /tmp/before.names /tmp/after.names
   ```
 
   The `/ > /` address keeps only scenario lines, skipping Gradle's own `> Task :test FAILED` (no
   space before its `>`); `-n` with the `p` flag then prints just the lines the substitution changed.
-  Check the resulting line count against the `M failed` in the summary.
+  Check the resulting line count against the `M failed` in the summary. Use `cleanTest test`, not
+  plain `test`: `testData` is not a declared input of the `test` task, so an unchanged-looking build
+  can report `:test UP-TO-DATE`, print no scenario lines at all, and leave you diffing against an
+  empty file that reads as "everything got fixed".
 
 **Update to new Platform API:**
 * Inspect libs version in `gradle/libs.versions.toml`, especially `intelliJPlatform` and `kotlin` version. Also `javaVersion` and `gradleVersion` in `gradle.properties`
