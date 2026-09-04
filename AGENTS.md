@@ -186,7 +186,15 @@ the entry class for any feature is to grep that file.
   metadata at most one minor above itself — 2026.2 ships metadata 2.4, so Kotlin 2.2 fails with
   "compiled with an incompatible version of Kotlin"); the **Java toolchain** must match the
   platform's bytecode target (2026.2 emits Java 25, so javac 21 reports "bad class file … wrong
-  version 69.0"); and the **`intelliJPlatform` gradle-plugin version** decides whether the Python
+  version 69.0") — and note this is a baseline for **Gradle itself**, not only for the toolchain:
+  `instrumentCode` runs inside the Gradle daemon and loads platform classes, so on 2026.2 a daemon
+  launched on JDK 21 dies with `UnsupportedClassVersionError: … class file version 69.0`, however
+  correctly `-Dorg.gradle.java.installations.paths` points at a 25. Set `JAVA_HOME` to the platform's
+  own baseline (21 for 2026.1, 25 for 2026.2), which is the opposite of the "launch Gradle with JDK
+  21" rule above — that rule is about the *pinned Gradle version*, and it stops applying once the
+  platform needs a newer JVM than the Gradle it ships with can be launched under. Gradle also will not
+  auto-detect a jenv-managed JDK, so pass the path explicitly; and the **`intelliJPlatform`
+  gradle-plugin version** decides whether the Python
   plugin's v2 content modules load *in tests* at all (2.16.0 → 2.18.1 took one port from 3361 failing
   tests, of ~3400, down to 1153). Check all three before debugging your own code.
 
