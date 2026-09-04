@@ -12,6 +12,7 @@ Released <Unreleased>
   [#570](https://github.com/JetBrains-Research/snakecharm/pull/570)).
 - **This release requires 2026.1 (build 261) or newer.** The Python plugin API changes below are not
   source- or binary-compatible with earlier IDEs, so `pluginSinceBuild` was raised from `252` to `261`.
+- Plugin title changed from `snakecharm` to `SnakeCharm`
 
 ### Changed
 - Adapted to the restructured Python plugin API in 2026.1: `PyType` is now a Kotlin interface (`name`
@@ -22,14 +23,13 @@ Released <Unreleased>
   "return outside of function" check moved into the final `PySyntaxAnnotator`. The false positive for
   `return` inside snakemake `run:` / `onstart` / `onerror` / `onsuccess` blocks is now suppressed by a
   new `daemon.highlightInfoFilter` (`SmkReturnHighlightInfoFilter`) instead of a custom annotator.
+- Unresolved SmkSL subscription keys (e.g. `config["missing"]`, `rules.foo.output["missing"]`) are now
+  shown as a weak warning instead of a warning. The plugin still reports them at `WARNING` severity,
+  but 2026.1 renders `ProblemHighlightType.LIKE_UNKNOWN_SYMBOL` through `HighlightInfoType.INFO`.
 
-## [2025.2.2]
-Released <Unreleased>
-
-### Plugin
-- Plugin title changed from `snakecharm` to `SnakeCharm`
-- Fixed `IllegalStateException: This method requires read access` error from `SmartModeScheduler.runWhenSmart(...)`
-- Fixed `ClassCastException: SmkSLFile cannot be cast to class SmkFile` error from `AbstractSmkRuleOrCheckpointType.getUseSections(...)`
+### Fixed
+- `IllegalStateException: This method requires read access` error from `SmartModeScheduler.runWhenSmart(...)`
+- `ClassCastException: SmkSLFile cannot be cast to class SmkFile` error from `AbstractSmkRuleOrCheckpointType.getUseSections(...)`
 
 ## [2025.2.1]
 Released on 12 August 2025
