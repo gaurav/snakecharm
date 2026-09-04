@@ -34,7 +34,7 @@ newer JDK, exits 0, and you get the Gradle crash above with no hint why. Use a j
 The target IDE (`platformType`/`platformVersion` in `gradle.properties`) is downloaded
 automatically on first build (hundreds of MB). `platformType = PC` is PyCharm Community, `PY` is
 PyCharm Professional. Note that **2025.2 is the last standalone PyCharm Community release** — from
-2026.1 (build 261) the unified PyCharm ships only under the `PY` artifact.
+2025.3 on the unified PyCharm ships only under the `PY` artifact.
 
 **Wrappers bundle:** `:buildWrappersBundle` reads `snakemakeWrappersRepoPath` (a local
 [snakemake-wrappers](https://github.com/snakemake/snakemake-wrappers) checkout) and, when that

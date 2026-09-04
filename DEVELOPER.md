@@ -61,11 +61,11 @@ If Gradle can't auto-detect the JDK, pass it explicitly:
 
 > **Note on the target IDE.** `platformType`/`platformVersion` in `gradle.properties` select
 > the IDE the plugin is built and tested against; it is downloaded automatically on first
-> build (a multi-hundred-MB to ~1 GB download). Since PyCharm was unified in 2025.1 and the
-> standalone Community Edition ended at 2025.2/2025.3, releases from 2026.1 (build `261`) on
-> are distributed under the Professional artifact, so `platformType = PY` is required to
-> build against them. The free/Pro split is a runtime license state and does not affect the
-> downloaded SDK or building the plugin.
+> build (a multi-hundred-MB to ~1 GB download). Since PyCharm was unified in 2025.1 and
+> [2025.2 was the last release of the standalone Community Edition](https://www.jetbrains.com/pycharm/whatsnew/2025-3/),
+> releases from 2025.3 on are distributed only under the Professional (`PY`) artifact, so
+> `platformType = PY` is required to build against them. The free/Pro split is a runtime
+> license state and does not affect the downloaded SDK or building the plugin.
 
 
 **Configure Tests:**
@@ -193,9 +193,9 @@ If you get `Unimplemented substep definition` in all `*.feature` files, ensure:
     [build-number-ranges](https://plugins.jetbrains.com/docs/intellij/build-number-ranges.html),
     e.g. `2025.2`=`252`, `2025.3`=`253`, `2026.1`=`261`. Set `pluginUntilBuild` to the
     branch of the newest IDE you actually built/tested against (e.g. `261.*`).
-  * `platformType`: PyCharm Community (`PC`) ended at 2025.2/2025.3. From 2026.1 (`261`) on,
-    the unified PyCharm ships under the Professional artifact, so use `platformType = PY`
-    (the build wires `Pythonid` for `PY`/`PD` and `PythonCore` for `PC`).
+  * `platformType`: 2025.2 was the last release of standalone PyCharm Community (`PC`). From
+    2025.3 on only the unified PyCharm ships, under the Professional artifact, so use
+    `platformType = PY` (the build wires `Pythonid` for `PY`/`PD` and `PythonCore` for `PC`).
   * Check available IDE versions with
     `./gradlew printProductsReleases`, or query
     `https://data.services.jetbrains.com/products/releases?code=PY&type=release` (`PY`=PyCharm).
