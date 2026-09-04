@@ -1,5 +1,6 @@
 @file:Suppress("SpellCheckingInspection", "UnstableApiUsage")
 
+import org.gradle.api.logging.Logging
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.Constants.Configurations
@@ -425,11 +426,23 @@ tasks {
         // external Python plugin) that directory doesn't exist, and setting the property to a bogus
         // path is worse than not setting it — the locator takes it verbatim, skipping the layout
         // check that would otherwise report the problem.
+        // On a PyCharm platform the directory is expected to exist, so a miss there means the layout
+        // moved (e.g. a `platformLocalPath` install, or a future repackaging). Say so — otherwise the
+        // run just dies with the "should be lib directory" IllegalStateException above and nothing
+        // hints that the jvmArg was silently skipped.
+        val expectPythonHelpers = gradlePropertyWithPriorityToSystemProperty("platformType").startsWith("P")
         jvmArgumentProviders += CommandLineArgumentProvider {
             val pythonHelpersPath = intellijPlatform.platformPath.resolve("plugins/python-ce/helpers")
             if (pythonHelpersPath.isDirectory()) {
                 listOf("-Didea.python.helpers.path=$pythonHelpersPath")
             } else {
+                if (expectPythonHelpers) {
+                    Logging.getLogger("snakecharm").warn(
+                        "Python helpers not found at $pythonHelpersPath, so -Didea.python.helpers.path is not set. " +
+                                "Tests that infer Python types will fail with " +
+                                "\"IllegalStateException: ... should be lib directory\"."
+                    )
+                }
                 emptyList()
             }
         }
