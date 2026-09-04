@@ -31,11 +31,13 @@ The Gradle build uses a **JDK 21 toolchain** (`javaVersion` in `gradle.propertie
 Gradle version pinned in `gradle.properties` (`gradleVersion`). Make sure a JDK 21 is
 installed and visible to Gradle before building from the command line.
 
-**If you use jenv or asdf, `.java-version` in the repo root already does this** — it selects the
+**If you use jenv, `.java-version` in the repo root already does this** — it selects the
 JDK for you as soon as you `cd` here, so you only need that JDK installed. The version it names
 tracks the platform and therefore differs per branch (21 for 2026.1, 25 for 2026.2), so re-check
-`java -version` after switching branches rather than assuming the shell followed you. Everyone
-else sets `JAVA_HOME` by hand:
+`java -version` after switching branches rather than assuming the shell followed you. **asdf ignores
+`.java-version` unless you set `legacy_version_file = yes` in `~/.asdfrc`** — without it asdf reads
+only `.tool-versions`, silently leaves your global JDK active, and you land in exactly the cryptic
+Gradle failure described below. Everyone else sets `JAVA_HOME` by hand:
 
 ```shell
 # macOS (Homebrew): install a JDK 21
