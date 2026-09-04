@@ -109,8 +109,10 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   `ProblemHighlightType.LIKE_UNKNOWN_SYMBOL` renders as `HighlightInfoType.INFO` (weak warning),
   where 2025.2 gave a plain warning.
 - **Analyzing results:** the suite is large — ~3250 Cucumber scenarios plus ~170 plain JUnit tests.
-  Budget around 25 minutes for a warm full `test` run, and far longer if the sandbox VFS was cleared
-  (see above: 1h24m measured). Either way, prefer the single-feature `@here` recipe while iterating. Gradle prints each failing scenario and a `N tests completed, M failed` summary, so tee
+  Budget around 25 minutes for a warm full `test` run — but that figure assumes a **warm Gradle
+  daemon**: a `cleanTest test` started against a cold one measured ~2200 of 3419 tests at 59 minutes
+  on 2026.1, i.e. ~95 minutes total, with the sandbox VFS untouched. Longer again if that VFS was
+  cleared (see above: 1h24m measured). Either way, prefer the single-feature `@here` recipe while iterating. Gradle prints each failing scenario and a `N tests completed, M failed` summary, so tee
   the log and reduce it rather than parsing anything: `sed -n '/ > /s/ FAILED$//p' log | sort -u`
   gives a sorted list you can `diff` between two runs (the `/ > /` address skips Gradle's own
   `> Task :test FAILED`). Check the line count against `M failed`. See
@@ -169,7 +171,11 @@ the entry class for any feature is to grep that file.
   `platformVersion`, `pluginSinceBuild`, `pluginUntilBuild`, `platformBundledPlugins`.
 - Plugin version scheme (`pluginVersion`) is `YEAR.MAJOR.MINOR`, where `YEAR.MAJOR` is the
   **minimal compatible platform** and `MINOR` is the plugin build digit. A new `pluginVersion`
-  must also get a matching section in `CHANGELOG.md`, or `patchPluginXml` fails.
+  must also get a matching section in `CHANGELOG.md`, or `patchPluginXml` fails. **Only that
+  section ships.** `changeNotes` is `getOrNull(pluginVersion)` (`build.gradle.kts`), so an older
+  still-unreleased section sitting below the current one renders nowhere — its fixes go out inside
+  the new release with no marketplace change note naming them. Fold any such section into the one
+  being released rather than leaving it in place.
 - Build numbers map to IDE versions per
   [build-number-ranges](https://plugins.jetbrains.com/docs/intellij/build-number-ranges.html)
   (`2025.2`=`252`, `2026.1`=`261`, …). `DEVELOPER.md` → "Update to new Platform API" is the
