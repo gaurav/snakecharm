@@ -1,8 +1,9 @@
 # AGENTS.md
 
 Guidance for AI coding agents (and human newcomers) working in this repository. Kept
-tool-agnostic on purpose — see also `DEVELOPER.md` for the deep parser/lexer walkthrough and
-`README.md` for the user-facing feature list.
+tool-agnostic on purpose — see also `DEVELOPER.md` for the deep parser/lexer walkthrough,
+`PORTING.md` for what each IntelliJ Platform bump broke and why, and `README.md` for the
+user-facing feature list.
 
 ## What this is
 
