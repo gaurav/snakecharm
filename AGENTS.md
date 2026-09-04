@@ -180,8 +180,8 @@ the entry class for any feature is to grep that file.
   the plugin. The task also exits non-zero on `INTERNAL_API_USAGES`, which this codebase has had for
   years — read the per-IDE `verification-verdict.txt` under `build/reports/pluginVerifier/` rather
   than trusting the exit code.
-- **A platform bump moves more than `platformVersion`.** Three toolchain baselines can move with it,
-  and each fails *before* your source is even considered, with an error that doesn't name the cause:
+- **A platform bump moves more than `platformVersion`.** Four baselines can move with it. Three fail
+  *before* your source is even considered, with an error that doesn't name the cause:
   the **Kotlin compiler** must be new enough to read the platform's metadata (a compiler reads
   metadata at most one minor above itself — 2026.2 ships metadata 2.4, so Kotlin 2.2 fails with
   "compiled with an incompatible version of Kotlin"); the **Java toolchain** must match the
@@ -189,6 +189,19 @@ the entry class for any feature is to grep that file.
   version 69.0"); and the **`intelliJPlatform` gradle-plugin version** decides whether the Python
   plugin's v2 content modules load *in tests* at all (2.16.0 → 2.18.1 took one port from 3361 failing
   tests, of ~3400, down to 1153). Check all three before debugging your own code.
+
+  The fourth is **the libraries the platform bundles that we also depend on**, which fail at *runtime*
+  instead and are correspondingly nastier. `kotlin-stdlib` and `kotlinx-serialization` are both pinned
+  to the platform's version in `gradle/libs.versions.toml` (`kotlinPlatform`,
+  `kotlinxSerializationPlatform`) and forced onto the runtime classpaths in `build.gradle.kts`;
+  re-check both against the new IDE. Read the shipped version out of the platform itself rather than
+  guessing — e.g. `unzip -p <ide>/lib/intellij.libraries.kotlinx.serialization.core.jar
+  META-INF/MANIFEST.MF | grep Implementation-Version`. The Gradle **test** classpath is flat rather
+  than plugin-classloader-scoped, so our copy wins there; when it is older than the platform's, classes
+  whose serializers were generated against the newer ABI throw `AbstractMethodError` in
+  `PluginGeneratedSerialDescriptor.kt`, which names neither this plugin nor serialization, and (see the
+  bullet below) takes hundreds of unrelated scenarios down with it. Issue #587 is the write-up; it cost
+  101 failures on the 2026.2 port.
 - **Logged errors are test failures.** `TestLoggerFactory` promotes anything logged at error level to
   a failed scenario, so one benign platform log can fail hundreds of unrelated tests. When triaging a
   wall of failures, group by exception message first — it is usually one cause, not many.
