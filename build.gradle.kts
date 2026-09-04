@@ -443,7 +443,10 @@ tasks {
 
     printProductsReleases {
         channels = listOf(ProductRelease.Channel.EAP)
-        types = listOf(IntelliJPlatformType.PyCharmCommunity)
+        // Follow `platformType` rather than hardcoding one: PyCharm Community (`PC`) publishes
+        // nothing from 2025.3 on, so a hardcoded `PyCharmCommunity` would report "no newer release"
+        // forever instead of listing the platform we actually build against.
+        types = listOf(IntelliJPlatformType.fromCode(gradlePropertyWithPriorityToSystemProperty("platformType")))
         untilBuild = provider { null }
 
         doLast {
