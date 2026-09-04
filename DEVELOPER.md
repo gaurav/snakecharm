@@ -29,7 +29,13 @@
 
 The Gradle build uses a **JDK 21 toolchain** (`javaVersion` in `gradle.properties`) and the
 Gradle version pinned in `gradle.properties` (`gradleVersion`). Make sure a JDK 21 is
-installed and visible to Gradle before building from the command line. For example:
+installed and visible to Gradle before building from the command line.
+
+**If you use jenv or asdf, `.java-version` in the repo root already does this** — it selects the
+JDK for you as soon as you `cd` here, so you only need that JDK installed. The version it names
+tracks the platform and therefore differs per branch (21 for 2026.1, 25 for 2026.2), so re-check
+`java -version` after switching branches rather than assuming the shell followed you. Everyone
+else sets `JAVA_HOME` by hand:
 
 ```shell
 # macOS (Homebrew): install a JDK 21
@@ -157,7 +163,7 @@ If you get `Unimplemented substep definition` in all `*.feature` files, ensure:
   empty file that reads as "everything got fixed".
 
 **Update to new Platform API:**
-* Inspect libs version in `gradle/libs.versions.toml`, especially `intelliJPlatform` and `kotlin` version. Also `javaVersion` and `gradleVersion` in `gradle.properties`
+* Inspect libs version in `gradle/libs.versions.toml`, especially `intelliJPlatform` and `kotlin` version. Also `javaVersion` and `gradleVersion` in `gradle.properties`, and `.java-version` in the repo root (the jenv/asdf pin, which has to move with `javaVersion` or jenv users silently keep building on the old JDK)
   * See [GitHub:intellij-platform-gradle-plugin](https://github.com/JetBrains/intellij-platform-gradle-plugin) documentation and [GitHub:intellij-platform-plugin-template](https://github.com/JetBrains/intellij-platform-plugin-template) as plugin example
   * `intelliJPlatform` is intellij-platform-gradle-plugin version, not Intellij Platform itself
   * `qodana` update as well
