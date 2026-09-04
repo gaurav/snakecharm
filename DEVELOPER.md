@@ -35,8 +35,12 @@ installed and visible to Gradle before building from the command line. For examp
 # macOS (Homebrew): install a JDK 21
 brew install openjdk@21
 
-# Point Gradle at it for this build (or manage per-directory with jenv/asdf/SDKMAN):
-export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+# Point Gradle at it for this build. Use a path that pins 21 exactly -- jenv/asdf/SDKMAN, or the
+# install path itself. Do NOT use `/usr/libexec/java_home -v 21`: it treats 21 as a *minimum*, so
+# on a machine without a JDK 21 it returns a newer JDK and exits 0, and the pinned Gradle then
+# crashes with a cryptic `Type T not present`.
+export JAVA_HOME=$(jenv prefix 21)      # or e.g. /opt/homebrew/opt/openjdk@21
+"$JAVA_HOME/bin/java" -version          # verify it really says 21
 
 ./gradlew clean buildPlugin        # builds build/distributions/snakecharm-*.zip
 ./gradlew test                     # runs the JUnit + Cucumber test suite
