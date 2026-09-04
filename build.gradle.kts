@@ -371,7 +371,12 @@ tasks {
         // `-x buildWrappersBundle`, where that task's spec is never evaluated: without this, a bundle
         // left by an earlier run that did have the property would be packed with a repo version that
         // disagrees with gradle.properties.
+        //
+        // The `dependsOn` is required: `from(<file provider>)` carries no task dependency, and
+        // buildWrappersBundle declares no outputs, so without it the bundle is never built and Copy
+        // silently packs nothing. Verify with `./gradlew -m prepareSandbox -PsnakemakeWrappersRepoPath=...`.
         if (wrappersRepoPath != null) {
+            dependsOn("buildWrappersBundle")
             from(layout.buildDirectory.file("bundledWrappers/smk-wrapper-storage-bundled.cbor")) {
                 into(pluginName.map { "$it/extra" })
             }
