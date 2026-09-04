@@ -97,6 +97,16 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   (Full write-up: PR #574.) Clearing it is **not free** — the next run re-indexes from scratch, and a
   full `cleanTest test` straight afterwards took **1h24m** on 2026.1. Clear it when the fixture
   actually changed, not as a routine "start clean".
+- **A "missing" highlight may only be *demoted*.** `When I check highlighting <level>s` calls
+  `CodeInsightTestFixture.checkHighlighting`, which reports only the requested severity (plus
+  errors) and *silently discards the rest* — so a highlight whose severity dropped from `WARNING`
+  to `WEAK WARNING` fails with the exact same `missing (…)` message as one that is not produced at
+  all. Before hunting for a suppression, dump what is actually there: add a temporary step calling
+  `fixture.doHighlighting()` and print each `HighlightInfo`'s `severity`, `type`, range,
+  `description` and `inspectionToolId`. One run replaces a sandbox debugging session — that is how
+  #584 was resolved. Platform bumps move these mappings: on 2026.1
+  `ProblemHighlightType.LIKE_UNKNOWN_SYMBOL` renders as `HighlightInfoType.INFO` (weak warning),
+  where 2025.2 gave a plain warning.
 - **Analyzing results:** the suite is large — ~3250 Cucumber scenarios plus ~170 plain JUnit tests.
   Budget around 25 minutes for a warm full `test` run, and far longer if the sandbox VFS was cleared
   (see above: 1h24m measured). Either way, prefer the single-feature `@here` recipe while iterating. Gradle prints each failing scenario and a `N tests completed, M failed` summary, so tee
