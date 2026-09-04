@@ -161,6 +161,19 @@ If you get `Unimplemented substep definition` in all `*.feature` files, ensure:
   * See [GitHub:intellij-platform-gradle-plugin](https://github.com/JetBrains/intellij-platform-gradle-plugin) documentation and [GitHub:intellij-platform-plugin-template](https://github.com/JetBrains/intellij-platform-plugin-template) as plugin example
   * `intelliJPlatform` is intellij-platform-gradle-plugin version, not Intellij Platform itself
   * `qodana` update as well
+  * `kotlinPlatform` and `kotlinxSerializationPlatform` are **not our versions to choose** — they
+    record what the target platform bundles, and `build.gradle.kts` forces them onto the runtime
+    classpaths. Re-read both from the new IDE rather than guessing:
+    ```shell
+    unzip -p <ide>/lib/intellij.libraries.kotlinx.serialization.core.jar META-INF/MANIFEST.MF | grep Implementation-Version
+    ls <ide>/lib/kotlin-stdlib-*.jar
+    ```
+    Leaving them stale does not fail the build; it fails at *runtime*, in tests, with an error that
+    names neither this plugin nor the library — a `@DebugMetadata` version mismatch for the stdlib,
+    or `AbstractMethodError` in `PluginGeneratedSerialDescriptor.kt` for serialization. Because the
+    Gradle test classpath is flat, our copy shadows the platform's, and one such error becomes
+    hundreds of failed scenarios. Issue
+    [#587](https://github.com/JetBrains-Research/snakecharm/issues/587) is the worked example.
   * 
 * Update platform API and this plugin versions in `gradle.properties`, see `pluginVersion`, `pluginSinceBuild`, `pluginUntilBuild`, `platformVersion`
   * `pluginVersion` version should be also mentioned in changelog `CHANGELOG.md`

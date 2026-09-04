@@ -7,8 +7,8 @@ cucumber = "7.19.0"
 # older API than we run on, nor ship a copy that shadows the platform's on the flat test classpath.
 #
 # WHEN BUMPING `platformVersion`: re-check this against the new platform and update both this and
-# kotlinxSerializationPlatform. AGENTS.md -> "A platform bump moves more than platformVersion" lists
-# how, and issue #587 has the full write-up of what goes wrong when they drift apart.
+# kotlinxSerializationPlatform. DEVELOPER.md -> "Update to new Platform API" is the checklist, and
+# issue #587 is the worked example of what goes wrong when they drift apart.
 cbor = "1.9.0"
 opentest4j = "1.3.0"
 
@@ -21,8 +21,8 @@ kotlin = "2.2.0"
 kotlinPlatform = "2.3.20"
 # kotlinx-serialization bundled with the target platform. Forced onto the runtime classpaths for the
 # same ABI reason as kotlinPlatform -- see the resolutionStrategy in build.gradle.kts for what breaks
-# without it, and issue #587 for the full write-up. Keep in sync with `platformVersion` in
-# gradle.properties; AGENTS.md -> "A platform bump moves more than platformVersion" is the checklist.
+# without it, and issue #587 for the worked example. Keep in sync with `platformVersion` in
+# gradle.properties; DEVELOPER.md -> "Update to new Platform API" is the checklist.
 #
 # To find the value for a new platform, read the manifest of the jar the platform ships:
 #   unzip -p <ide>/lib/intellij.libraries.kotlinx.serialization.core.jar META-INF/MANIFEST.MF \
