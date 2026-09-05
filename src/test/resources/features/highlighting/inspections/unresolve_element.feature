@@ -157,7 +157,7 @@ Feature: Inspection: Unresolved element
      """
      Unresolved reference '{2}/boo.yaml'
      """
-    When I check highlighting weak warnings
+    When I check highlighting warnings and weak warnings
 
   Scenario Outline: Implicit variables not marked as unresolved
     Given a snakemake project
