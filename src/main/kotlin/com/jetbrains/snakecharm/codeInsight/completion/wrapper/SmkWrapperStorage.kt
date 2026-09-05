@@ -22,7 +22,7 @@ import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.*
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.exists
 
 class SmkWrapperStorage(val project: Project) : Disposable {
@@ -140,9 +140,11 @@ class SmkWrapperStorage(val project: Project) : Disposable {
         /**
          * A plugin with no bundled wrappers leaves [wrappers] empty, so the `storage.wrappers.isNotEmpty()`
          * fast path in [loadOrCollectLocalWrappers] never trips and we re-check the missing file on every
-         * settings change. Warn once instead of filling idea.log with the same line.
+         * settings change. Warn once *per path* instead of filling idea.log with the same line: this
+         * object is JVM-wide, so a single flag would also swallow the warning for a genuinely different
+         * path — another open project, or an installation whose sandbox path changed under a plugin update.
          */
-        private val missingBundleWarned = AtomicBoolean()
+        private val missingBundleWarnedPaths: MutableSet<Path> = ConcurrentHashMap.newKeySet<Path>()
 
         fun getInstance(project: Project) = project.getService(SmkWrapperStorage::class.java)!!
 
@@ -215,7 +217,7 @@ class SmkWrapperStorage(val project: Project) : Disposable {
                 // A plugin built without `-PsnakemakeWrappersRepoPath` has no bundle (see #571), which is
                 // now the default for a local build. Degrade to "no wrappers known" instead of throwing
                 // out of the background wrapper-collection task.
-                if (missingBundleWarned.compareAndSet(false, true)) {
+                if (missingBundleWarnedPaths.add(wrappersBundlePath)) {
                     LOGGER.warn(
                         "Missing wrappers bundle in plugin bundle: '$wrappersBundlePath' doesn't exist. " +
                                 "Wrapper name completion will be unavailable."
