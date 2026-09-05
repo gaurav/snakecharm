@@ -391,10 +391,13 @@ tasks {
 
     prepareSandbox {
         // Pack wrappers bundle into plugin, but only when this build actually produced one. Gating
-        // here (rather than deleting a stale bundle from buildWrappersBundle's onlyIf) also covers
-        // `-x buildWrappersBundle`, where that task's spec is never evaluated: without this, a bundle
-        // left by an earlier run that did have the property would be packed with a repo version that
-        // disagrees with gradle.properties.
+        // here (rather than deleting a stale bundle from buildWrappersBundle's onlyIf) covers the
+        // common case: with `snakemakeWrappersRepoPath` unset, a bundle left by an earlier run that
+        // did have the property is not packed, so the plugin can't ship a wrappers list whose repo
+        // version disagrees with gradle.properties. It does NOT cover an explicit
+        // `-x buildWrappersBundle` *with* the property set — there the `from(...)` is registered and
+        // a stale bundle would still be packed. That excluding is a deliberate act; if you do it,
+        // delete build/bundledWrappers/ first.
         //
         // The `dependsOn` is required: `from(<file provider>)` carries no task dependency, and
         // buildWrappersBundle declares no outputs, so without it the bundle is never built and Copy
