@@ -106,6 +106,12 @@ configurations.matching { it.name.endsWith("RuntimeClasspath", ignoreCase = true
 }
 
 
+// The platform types whose IDE *is* a Python IDE, i.e. the ones that bundle the Python plugin (and
+// therefore its `helpers` directory) as part of the distribution: PyCharm Community, PyCharm
+// Professional and DataSpell. Anything else (IDEA + the external Python plugin) is laid out
+// differently. Keep this in sync with the `when (platformType)` below.
+val isPyCharmPlatform = gradlePropertyWithPriorityToSystemProperty("platformType") in setOf("PC", "PY", "PD")
+
 dependencies {
     implementation(libs.kotlinStdlibJdk8)
     implementation(libs.kotlinxCbor)
@@ -186,9 +192,7 @@ intellijPlatform {
     instrumentCode = true
     projectName = project.name
 
-    val platformType = gradlePropertyWithPriorityToSystemProperty("platformType")
-    val isPyCharm = platformType == "PC" || platformType == "PY" || platformType == "PD"
-    sandboxContainer = file("${project.rootDir}/.sandbox${if (isPyCharm) "_pycharm" else ""}")
+    sandboxContainer = file("${project.rootDir}/.sandbox${if (isPyCharmPlatform) "_pycharm" else ""}")
 
     pluginConfiguration {
         name = gradleProperty("pluginName")
@@ -430,13 +434,12 @@ tasks {
         // moved (e.g. a `platformLocalPath` install, or a future repackaging). Say so — otherwise the
         // run just dies with the "should be lib directory" IllegalStateException above and nothing
         // hints that the jvmArg was silently skipped.
-        val expectPythonHelpers = gradlePropertyWithPriorityToSystemProperty("platformType").startsWith("P")
         jvmArgumentProviders += CommandLineArgumentProvider {
             val pythonHelpersPath = intellijPlatform.platformPath.resolve("plugins/python-ce/helpers")
             if (pythonHelpersPath.isDirectory()) {
                 listOf("-Didea.python.helpers.path=$pythonHelpersPath")
             } else {
-                if (expectPythonHelpers) {
+                if (isPyCharmPlatform) {
                     Logging.getLogger("snakecharm").warn(
                         "Python helpers not found at $pythonHelpersPath, so -Didea.python.helpers.path is not set. " +
                                 "Tests that infer Python types will fail with " +
