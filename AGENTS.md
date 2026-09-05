@@ -107,7 +107,11 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   `description` and `inspectionToolId`. One run replaces a sandbox debugging session — that is how
   #584 was resolved. Platform bumps move these mappings: on 2026.1
   `ProblemHighlightType.LIKE_UNKNOWN_SYMBOL` renders as `HighlightInfoType.INFO` (weak warning),
-  where 2025.2 gave a plain warning.
+  where 2025.2 gave a plain warning. **Fixing such a scenario by re-labelling its step costs
+  coverage**, for the same reason: moving `warning`s to `weak warning`s stops it asserting anything
+  at WARNING level, and in a scenario without `ignoring extra highlighting` that assertion was the
+  guard against stray warnings. Use `I check highlighting warnings and weak warnings`, which asks
+  for both.
 - **Analyzing results:** the suite is large — ~3250 Cucumber scenarios plus ~170 plain JUnit tests.
   Budget around 25 minutes for a warm full `test` run — but that figure assumes a **warm Gradle
   daemon**: a `cleanTest test` started against a cold one measured ~2200 of 3419 tests at 59 minutes
