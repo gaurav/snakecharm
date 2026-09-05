@@ -402,8 +402,12 @@ tasks {
         // The `dependsOn` is required: `from(<file provider>)` carries no task dependency, and
         // buildWrappersBundle declares no outputs, so without it the bundle is never built and Copy
         // silently packs nothing. Verify with `./gradlew -m prepareSandbox -PsnakemakeWrappersRepoPath=...`.
+        // It is unconditional so that with the property unset buildWrappersBundle still enters the
+        // task graph and its `onlyIf` runs -- that block is the only place the "no wrappers bundled"
+        // warning is logged, and gating the dependency on the property would silence it in exactly
+        // the case it exists for.
+        dependsOn("buildWrappersBundle")
         if (wrappersRepoPath != null) {
-            dependsOn("buildWrappersBundle")
             from(layout.buildDirectory.file("bundledWrappers/smk-wrapper-storage-bundled.cbor")) {
                 into(pluginName.map { "$it/extra" })
             }
