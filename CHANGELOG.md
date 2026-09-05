@@ -10,8 +10,11 @@ Released <Unreleased>
 - Compatibility with the unified PyCharm / IntelliJ Platform 2026.1 (build 261). PyCharm Community and
   Professional were merged, so the plugin now builds against the `PY` platform type (see
   [#570](https://github.com/JetBrains-Research/snakecharm/pull/570)).
-- **This release requires 2026.1 (build 261) or newer.** The Python plugin API changes below are not
-  source- or binary-compatible with earlier IDEs, so `pluginSinceBuild` was raised from `252` to `261`.
+- **This release requires 2026.1 (build 261), and only 2026.1.** The Python plugin API changes below
+  are not source- or binary-compatible with earlier IDEs, so `pluginSinceBuild` was raised from `252`
+  to `261`. Unlike previous releases, `pluginUntilBuild` stays on the *same* branch (`261.*`) rather
+  than opening up the next one, so the plugin will not install on a 2026.2 EAP — that platform needs
+  its own port ([#577](https://github.com/JetBrains-Research/snakecharm/pull/577)).
 - Plugin title changed from `snakecharm` to `SnakeCharm`
 
 ### Changed
@@ -23,9 +26,12 @@ Released <Unreleased>
   "return outside of function" check moved into the final `PySyntaxAnnotator`. The false positive for
   `return` inside snakemake `run:` / `onstart` / `onerror` / `onsuccess` blocks is now suppressed by a
   new `daemon.highlightInfoFilter` (`SmkReturnHighlightInfoFilter`) instead of a custom annotator.
-- Unresolved SmkSL subscription keys (e.g. `config["missing"]`, `rules.foo.output["missing"]`) are now
-  shown as a weak warning instead of a warning. The plugin still reports them at `WARNING` severity,
-  but 2026.1 renders `ProblemHighlightType.LIKE_UNKNOWN_SYMBOL` through `HighlightInfoType.INFO`.
+- Unresolved references inside SmkSL string injections (e.g. `shell: "{dooooo}"`,
+  `conda: f"{2}/boo.yaml"`) are now shown as a weak warning instead of a warning. Nothing in the
+  plugin changed: any reference reported with `ProblemHighlightType.LIKE_UNKNOWN_SYMBOL` — which is
+  what `PyUnresolvedReferencesInspection` uses here — is rendered through `HighlightInfoType.INFO` in
+  2026.1, where 2025.2 gave it plain warning severity
+  ([#584](https://github.com/JetBrains-Research/snakecharm/issues/584)).
 
 ### Fixed
 - `IllegalStateException: This method requires read access` error from `SmartModeScheduler.runWhenSmart(...)`
