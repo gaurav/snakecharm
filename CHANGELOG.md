@@ -41,6 +41,11 @@ Released <Unreleased>
   ([#584](https://github.com/JetBrains-Research/snakecharm/issues/584)).
 
 ### Fixed
+- Implicitly imported snakemake names (`expand`, `protected`, `lookup`, …) stopped resolving after any
+  change to the project roots — e.g. switching interpreter or attaching a library. The platform
+  invalidates library PSI on a roots change, which emptied the implicit-symbol cache with nothing to
+  rebuild it in time; the cache is now refreshed on `rootsChanged`
+  ([#578](https://github.com/JetBrains-Research/snakecharm/issues/578)).
 - `IllegalStateException: This method requires read access` error from `SmartModeScheduler.runWhenSmart(...)`
 - `ClassCastException: SmkSLFile cannot be cast to class SmkFile` error from `AbstractSmkRuleOrCheckpointType.getUseSections(...)`
 
