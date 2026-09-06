@@ -441,7 +441,12 @@ tasks {
 
         // Narrow a local run to tagged scenarios without editing AllCucumberFeaturesTest:
         // CUCUMBER_TAGS='@here' ./gradlew test --tests "features.AllCucumberFeaturesTest"
-        System.getenv("CUCUMBER_TAGS")?.let { systemProperty("cucumber.filter.tags", it) }
+        // `cucumber.filter.tags` *replaces* @CucumberOptions(tags = "not @ignore") rather than
+        // intersecting with it, so re-apply that filter here -- otherwise CUCUMBER_TAGS='@here' also
+        // runs the @ignore'd scenarios that happen to carry @here.
+        System.getenv("CUCUMBER_TAGS")?.let {
+            systemProperty("cucumber.filter.tags", "not @ignore and ($it)")
+        }
 
         // The 2026.1 Python plugin ships its code as v2 content modules under
         // plugins/python-ce/lib/modules/. That breaks PythonHelpersLocator's jar-path lookup for the
