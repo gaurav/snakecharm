@@ -68,13 +68,21 @@ class StepDefs {
         // Write code here that turns the phrase above into concrete actions
         val testDataRoot = SnakemakeTestUtil.getTestDataPath().toString()
 
-        // Reuse the descriptor (and therefore its SDK) across scenarios with the same roots. Each
-        // descriptor builds a mock SDK named "Mock Python SDK <level>", and since 2026.2 SDKs are
-        // workspace-model entities: adding a second one with the same symbolic id logs
-        // "addEntity: symbolic id already exists", which TestLoggerFactory turns into a test failure.
-        // A per-scenario descriptor therefore failed ~1070 otherwise-unrelated scenarios. Caching is
-        // also the standard light-test pattern (a static LightProjectDescriptor), and lets the light
-        // fixture reuse the project instead of rebuilding it per scenario.
+        // Reuse the descriptor across scenarios with the same roots. The light fixture hands back the
+        // same project as long as it is given the same descriptor and rebuilds it whenever the
+        // descriptor changes, and each rebuild registers a mock SDK named "Mock Python SDK <level>";
+        // since 2026.2 SDKs are workspace-model entities, so a second one with the same symbolic id
+        // logs "addEntity: symbolic id already exists", which TestLoggerFactory turns into a test
+        // failure. A per-scenario descriptor therefore failed ~1070 otherwise-unrelated scenarios.
+        // Caching is also the standard light-test pattern (a static LightProjectDescriptor).
+        //
+        // What is cached is the descriptor, NOT the SDK: PyLightProjectDescriptor.getSdk() is a
+        // function and builds a fresh Sdk on every call, which is deliberate. Memoising it looks like
+        // the obvious follow-up and is not -- the light fixture disposes the SDK along with the
+        // project it was attached to, so the next scenario to reuse the instance dies with
+        // "AlreadyDisposedException: Requesting a package manager for an already disposed SDK"
+        // (measured: 14 failures across the resolve/implicit-symbol features, 0 without).
+        // myPythonOnlySdk below is cached only because nothing ever attaches it to a project.
         val descriptorKey = listOf(level.toString(), testDataRoot) + additionalRoots.map { it.toString() }
         val projectDescriptor = projectDescriptors.getOrPut(descriptorKey) {
             PyLightProjectDescriptor(level, testDataRoot, *additionalRoots)

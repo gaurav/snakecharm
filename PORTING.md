@@ -432,6 +432,18 @@ invalidate the cache — use `cleanTest test` after test-data edits.
    was the wrong one here. The 46 correlated perfectly with the bump and still had a different
    cause. A like-for-like A/B tells you *that* something changed, never *what*.
 
+4. **"The descriptor cache should memoise the SDK too."** — Rejected, with measurements.
+   `PyLightProjectDescriptor.getSdk()` is a *function*, so it builds a fresh `Mock Python SDK
+   <level>` on every call even though the descriptor itself is cached; caching it with a `by lazy`
+   looks like the obvious completion of `11fdec6a` and is wrong. The light fixture disposes the SDK
+   along with the project it was attached to, so the next scenario that reuses the instance dies
+   with `AlreadyDisposedException: Requesting a package manager for an already disposed SDK Mock
+   Python SDK 3.7`. Measured over the `@here` set
+   (`resolve/implicit_py_symbols_resolve`, `resolve/wildcards_resolve`, `resolve/section_args_resolve`,
+   `highlighting/implicit_symbols_related_warnings`, 342 scenarios): **14 failures with the memo, 0
+   without.** `StepDefs.pythonOnlySdks` gets away with caching only because nothing attaches those
+   SDKs to a project.
+
 ### The `MockPackages3/snakemake` fixture behaves differently per branch
 
 Provisioned per #574 (clone at `snakemake_api.yaml`'s `defaultVersion`, symlink `src/snakemake`,
