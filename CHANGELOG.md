@@ -15,12 +15,13 @@ Released <Unreleased>
   2026.1 is not supported: the annotator API it offered was removed in 2026.2, and advertising
   compatibility the binary cannot honour is the failure mode
   [#569](https://github.com/JetBrains-Research/snakecharm/pull/569) was rejected for.
+- Plugin title changed from `snakecharm` to `SnakeCharm`
 
 ### Changed
 - Adapted to the restructured Python plugin API in 2026.1: `PyType` is now a Kotlin interface (`name`
-  and `isBuiltin` are properties, `name` is nullable, and `getCompletionVariants` takes a nullable
-  completion prefix), and `CustomFoldingBuilder.buildLanguageFoldRegions` now takes a nullable-element
-  descriptor list.
+  and `isBuiltin` are properties, `name` is nullable, and `getCompletionVariants` takes a non-null
+  `ProcessingContext` and returns `Array<out Any>`), and `CustomFoldingBuilder.buildLanguageFoldRegions`
+  now takes a nullable-element descriptor list.
 - The `com.jetbrains.python.validation.ReturnAnnotator` extension point was removed; its
   "return outside of function" check moved into the final `PySyntaxAnnotator`. The false positive for
   `return` inside snakemake `run:` / `onstart` / `onerror` / `onsuccess` blocks is now suppressed by a
@@ -32,14 +33,16 @@ Released <Unreleased>
 - 2026.2 ships Kotlin 2.4 metadata in the Python plugin, which the previous Kotlin 2.2 compiler cannot
   read; the build now compiles with Kotlin 2.3 and aligns the forced runtime `kotlin-stdlib` with the
   platform's 2.4.x.
+- Unresolved references inside SmkSL string injections (e.g. `shell: "{dooooo}"`,
+  `conda: f"{2}/boo.yaml"`) are now shown as a weak warning instead of a warning. Nothing in the
+  plugin changed: any reference reported with `ProblemHighlightType.LIKE_UNKNOWN_SYMBOL` — which is
+  what `PyUnresolvedReferencesInspection` uses here — is rendered through `HighlightInfoType.INFO`
+  since 2026.1, where 2025.2 gave it plain warning severity
+  ([#584](https://github.com/JetBrains-Research/snakecharm/issues/584)).
 
-## [2025.2.2]
-Released <Unreleased>
-
-### Plugin
-- Plugin title changed from `snakecharm` to `SnakeCharm`
-- Fixed `IllegalStateException: This method requires read access` error from `SmartModeScheduler.runWhenSmart(...)`
-- Fixed `ClassCastException: SmkSLFile cannot be cast to class SmkFile` error from `AbstractSmkRuleOrCheckpointType.getUseSections(...)`
+### Fixed
+- `IllegalStateException: This method requires read access` error from `SmartModeScheduler.runWhenSmart(...)`
+- `ClassCastException: SmkSLFile cannot be cast to class SmkFile` error from `AbstractSmkRuleOrCheckpointType.getUseSections(...)`
 
 ## [2025.2.1]
 Released on 12 August 2025

@@ -1,5 +1,6 @@
 @file:Suppress("SpellCheckingInspection", "UnstableApiUsage")
 
+import org.gradle.api.logging.Logging
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.Constants.Configurations
@@ -87,16 +88,29 @@ configurations.matching { it.name.endsWith("RuntimeClasspath", ignoreCase = true
         // Same class of problem as the stdlib above, different library. The platform bundles
         // kotlinx-serialization-core 1.9.0 (lib/intellij.libraries.kotlinx.serialization.core.jar) and
         // its classes carry serializers generated against that ABI; our `kotlinxCbor` dependency drags
-        // core 1.4.1 onto the runtime/test classpath, where it wins. Platform-generated serializers then
-        // call methods that do not exist in 1.4.1 and die with
+        // core onto the runtime/test classpath, where -- the Gradle test classpath being flat rather
+        // than plugin-classloader-scoped -- ours wins. Platform-generated serializers then call methods
+        // that do not exist in the older core and die with
         // "AbstractMethodError at PluginGeneratedSerialDescriptor.kt", which TestLoggerFactory turns
-        // into a test failure. Forcing core (and cbor, so the pair stays consistent) to the platform's
-        // version fixes the direction of the skew: newer core runs older generated code fine.
+        // into a test failure, across whole swathes of otherwise unrelated scenarios. Forcing core (and
+        // cbor, so the pair stays consistent) to the platform's version fixes the direction of the
+        // skew: a newer core runs older generated code fine.
+        //
+        // `cbor` in the version catalog is already 1.9.0, so today these forces are a no-op; they are
+        // what keeps a future catalog bump, or a transitive downgrade, from reintroducing the skew.
+        // Measured on #577 (2026.2), where the same skew was live: forcing this removed 101 failures.
+        // See #587.
         force("org.jetbrains.kotlinx:kotlinx-serialization-core:$kotlinxSerializationPlatformVersion")
         force("org.jetbrains.kotlinx:kotlinx-serialization-cbor:$kotlinxSerializationPlatformVersion")
     }
 }
 
+
+// The platform types whose IDE *is* a Python IDE, i.e. the ones that bundle the Python plugin (and
+// therefore its `helpers` directory) as part of the distribution: PyCharm Community, PyCharm
+// Professional and DataSpell. Anything else (IDEA + the external Python plugin) is laid out
+// differently. Keep this in sync with the `when (platformType)` below.
+val isPyCharmPlatform = gradlePropertyWithPriorityToSystemProperty("platformType") in setOf("PC", "PY", "PD")
 
 dependencies {
     implementation(libs.kotlinStdlibJdk8)
@@ -185,9 +199,7 @@ intellijPlatform {
     instrumentCode = true
     projectName = project.name
 
-    val platformType = gradlePropertyWithPriorityToSystemProperty("platformType")
-    val isPyCharm = platformType == "PC" || platformType == "PY" || platformType == "PD"
-    sandboxContainer = file("${project.rootDir}/.sandbox${if (isPyCharm) "_pycharm" else ""}")
+    sandboxContainer = file("${project.rootDir}/.sandbox${if (isPyCharmPlatform) "_pycharm" else ""}")
 
     pluginConfiguration {
         name = gradleProperty("pluginName")
@@ -242,12 +254,14 @@ intellijPlatform {
         ides {
             // releases based on since/until builds
             recommended()
-            // EAP snapshots
+            // EAP snapshots, over the same range the manifest claims. Hardcoding a wider range here
+            // makes `verifyPlugin` fail against IDEs that could never install the plugin: the verifier
+            // honours this list, not pluginSinceBuild/pluginUntilBuild.
             select {
                 types = listOf(IntelliJPlatformType.PyCharmProfessional)
                 channels = listOf(ProductRelease.Channel.EAP, ProductRelease.Channel.RELEASE)
-                sinceBuild = "242"
-                untilBuild = "301.*"
+                sinceBuild = gradleProperty("pluginSinceBuild")
+                untilBuild = gradleProperty("pluginUntilBuild")
             }
         }
     }
@@ -295,6 +309,10 @@ kotlin {
     }
 }
 
+// The production wrappers bundle needs a local snakemake-wrappers checkout (see DEVELOPER.md); CI
+// provides one. Read once here so both `buildWrappersBundle` and `prepareSandbox` gate on it. See #571.
+val wrappersRepoPath = gradlePropertyOptional("snakemakeWrappersRepoPath")?.takeIf { it.isNotBlank() }
+
 tasks {
 
     runIde {
@@ -327,15 +345,12 @@ tasks {
                 configurations[Configurations.INTELLIJ_PLATFORM_TEST_CLASSPATH]
         enableAssertions = true
 
-        // The production wrappers bundle needs a local snakemake-wrappers checkout (see DEVELOPER.md);
-        // CI provides one. When the property is unset, skip with a warning instead of failing
-        // buildPlugin/verifyPlugin for contributors who don't have it. See issue #571.
+        // When the property is unset, skip with a warning instead of failing buildPlugin/verifyPlugin
+        // for contributors who don't have a snakemake-wrappers checkout. See issue #571.
         //
         // Skip only when it is *unset*. If it is set but wrong (a typo, or a renamed CI checkout) the
         // task still runs and SmkWrapperCrawler fails loudly, as before -- silently publishing a plugin
         // with no wrapper metadata is a much worse outcome than a broken build.
-        val wrappersRepoPath = gradlePropertyOptional("snakemakeWrappersRepoPath")?.takeIf { it.isNotBlank() }
-        val wrappersBundleFile = layout.buildDirectory.file("bundledWrappers/smk-wrapper-storage-bundled.cbor")
         onlyIf {
             if (wrappersRepoPath == null) {
                 logger.warn(
@@ -344,9 +359,6 @@ tasks {
                         "name completion will be unavailable). " +
                         "Pass -PsnakemakeWrappersRepoPath=<snakemake-wrappers checkout> to include them. See #571."
                 )
-                // Drop a bundle left by an earlier run that did have the property, so prepareSandbox
-                // cannot pack a stale one whose embedded repo version disagrees with gradle.properties.
-                wrappersBundleFile.get().asFile.delete()
             }
             wrappersRepoPath != null
         }
@@ -385,11 +397,27 @@ tasks {
 
 
     prepareSandbox {
-        // Pack wrappers bundle into plugin:
+        // Pack wrappers bundle into plugin, but only when this build actually produced one. Gating
+        // here (rather than deleting a stale bundle from buildWrappersBundle's onlyIf) covers the
+        // common case: with `snakemakeWrappersRepoPath` unset, a bundle left by an earlier run that
+        // did have the property is not packed, so the plugin can't ship a wrappers list whose repo
+        // version disagrees with gradle.properties. It does NOT cover an explicit
+        // `-x buildWrappersBundle` *with* the property set — there the `from(...)` is registered and
+        // a stale bundle would still be packed. That excluding is a deliberate act; if you do it,
+        // delete build/bundledWrappers/ first.
+        //
+        // The `dependsOn` is required: `from(<file provider>)` carries no task dependency, and
+        // buildWrappersBundle declares no outputs, so without it the bundle is never built and Copy
+        // silently packs nothing. Verify with `./gradlew -m prepareSandbox -PsnakemakeWrappersRepoPath=...`.
+        // It is unconditional so that with the property unset buildWrappersBundle still enters the
+        // task graph and its `onlyIf` runs -- that block is the only place the "no wrappers bundled"
+        // warning is logged, and gating the dependency on the property would silence it in exactly
+        // the case it exists for.
         dependsOn("buildWrappersBundle")
-
-        from(layout.buildDirectory.file("bundledWrappers/smk-wrapper-storage-bundled.cbor")) {
-            into(pluginName.map { "$it/extra" })
+        if (wrappersRepoPath != null) {
+            from(layout.buildDirectory.file("bundledWrappers/smk-wrapper-storage-bundled.cbor")) {
+                into(pluginName.map { "$it/extra" })
+            }
         }
         from(layout.projectDirectory.file("snakemake_api.yaml")) {
             into(pluginName.map { "$it/extra" })
@@ -420,11 +448,22 @@ tasks {
         // external Python plugin) that directory doesn't exist, and setting the property to a bogus
         // path is worse than not setting it — the locator takes it verbatim, skipping the layout
         // check that would otherwise report the problem.
+        // On a PyCharm platform the directory is expected to exist, so a miss there means the layout
+        // moved (e.g. a `platformLocalPath` install, or a future repackaging). Say so — otherwise the
+        // run just dies with the "should be lib directory" IllegalStateException above and nothing
+        // hints that the jvmArg was silently skipped.
         jvmArgumentProviders += CommandLineArgumentProvider {
             val pythonHelpersPath = intellijPlatform.platformPath.resolve("plugins/python-ce/helpers")
             if (pythonHelpersPath.isDirectory()) {
                 listOf("-Didea.python.helpers.path=$pythonHelpersPath")
             } else {
+                if (isPyCharmPlatform) {
+                    Logging.getLogger("snakecharm").warn(
+                        "Python helpers not found at $pythonHelpersPath, so -Didea.python.helpers.path is not set. " +
+                                "Tests that infer Python types will fail with " +
+                                "\"IllegalStateException: ... should be lib directory\"."
+                    )
+                }
                 emptyList()
             }
         }
@@ -438,7 +477,10 @@ tasks {
 
     printProductsReleases {
         channels = listOf(ProductRelease.Channel.EAP)
-        types = listOf(IntelliJPlatformType.PyCharmCommunity)
+        // Follow `platformType` rather than hardcoding one: PyCharm Community (`PC`) publishes
+        // nothing from 2025.3 on, so a hardcoded `PyCharmCommunity` would report "no newer release"
+        // forever instead of listing the platform we actually build against.
+        types = listOf(IntelliJPlatformType.fromCode(gradlePropertyWithPriorityToSystemProperty("platformType")))
         untilBuild = provider { null }
 
         doLast {

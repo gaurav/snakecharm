@@ -503,8 +503,11 @@ Feature: Resolve implicitly imported python names
              path = snakemake.input[0]
      """
     And PyUnresolvedReferencesInspection inspection is enabled
+    # 2026.1 names the containing package where 2025.2 named the file it resolved to:
+    # "in 'snakemake'" rather than "in '__init__.py'". Same inspection, same WARNING severity, same
+    # anchor -- only the message text moved. See #589.
     Then I expect inspection warning on <input> with message
       """
-      Cannot find reference 'input' in '__init__.py'
+      Cannot find reference 'input' in 'snakemake'
       """
     When I check highlighting warnings
