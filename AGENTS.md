@@ -121,7 +121,14 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   gives a sorted list you can `diff` between two runs (the `/ > /` address skips Gradle's own
   `> Task :test FAILED`). Check the line count against `M failed`. See
   DEVELOPER.md → "Reading test results". The JUnit XML under `build/test-results/test/` holds the
-  same information if you need a run whose console output you no longer have.
+  same information if you need a run whose console output you no longer have — but note it is
+  written when the `test` task *ends*, and on an all-green run there is no `N tests completed`
+  line either (Gradle prints that only on failure), so **a run in progress looks identical to a
+  hung one**. The live signals are the test JVM's accumulating CPU time (`ps -o time=`) and the
+  mtime of `build/test-results/test/binary/in-progress-results-generic.bin`; `jstat -gc` tells you
+  whether a quiet stretch is a slow scenario or a GC death spiral. Budget generously on a
+  memory-constrained machine: one all-green run measured **3h52m** on a swapping 16 GB laptop,
+  against the ~95 minutes above.
 
 ## Architecture
 
