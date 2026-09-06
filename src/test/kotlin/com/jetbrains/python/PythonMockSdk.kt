@@ -144,8 +144,10 @@ object PythonMockSdk {
         // there is nothing to prune -- `PythonHelpersLocator.getHelpersRoots()` instead dies with
         // "Missing extension point: com.jetbrains.python.pythonHelpersLocator". Register the EP and a
         // locator pointing at the helpers directory the `-Didea.python.helpers.path` jvmArg already
-        // supplies. We register our own rather than PythonHelpersLocatorDefault because the default
-        // resolves through the plugin dist dir, which is exactly what #2070 breaks here.
+        // supplies. PythonHelpersLocatorDefault would resolve to the same root -- its `getRoot()`
+        // reads that property before it ever tries the plugin dist dir -- but it is declared by the
+        // same content module that never loads, so register our own rather than reach for an
+        // internal class the flat test classpath only happens to expose.
         val helpersPath = requireNotNull(System.getProperty(PYTHON_HELPERS_PATH_PROPERTY)) {
             "'$PYTHON_HELPERS_PATH_PROPERTY' is not set; see the test task's jvmArgumentProviders in build.gradle.kts"
         }
