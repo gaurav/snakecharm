@@ -112,6 +112,19 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   at WARNING level, and in a scenario without `ignoring extra highlighting` that assertion was the
   guard against stray warnings. Use `I check highlighting warnings and weak warnings`, which asks
   for both.
+- **A platform bump can move a check between inspections, and the scenario then passes vacuously.**
+  `Given <X> inspection is enabled` fails loudly on an inspection that was *renamed*
+  (`fail("Unknown inspection:…")`), but says nothing when the inspection still exists and merely
+  stopped owning the diagnostic the scenario is about. The check for `expand(" ", **1)` moved from
+  `PyArgumentListInspection` to `PyTypeCheckerInspection` in 2026.2, which is why one scenario lost
+  its warning — and why its sibling, which asserts `expand(" ", **wildcards)` produces *no* warning,
+  went on passing while guarding nothing at all. Trace the message to its owner rather than guessing:
+  grep the message text in the platform's `messages/*.properties` for its bundle key, then grep the
+  extracted plugin jars for the class that references that key, in both the old and new IDE. Two
+  greps beat a type-inference theory — the key was renamed
+  `INSP.expected.dict.got.type` → `INSP.type.checker.unpack.expected.mapping`, which names the new
+  owner outright. A scenario asserting "no warning" is worth re-checking after any bump for exactly
+  this reason.
 - **Analyzing results:** the suite is large — ~3250 Cucumber scenarios plus ~170 plain JUnit tests.
   Budget around 25 minutes for a warm full `test` run — but that figure assumes a **warm Gradle
   daemon**: a `cleanTest test` started against a cold one measured ~2200 of 3419 tests at 59 minutes
