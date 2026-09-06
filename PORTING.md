@@ -377,7 +377,9 @@ Always read the XML.
 
 ### Running the suite locally
 
-`maxHeapSize` is `SNAKECHARM_TEST_HEAP ?: "1024m"` — the small default is for TeamCity agents. Locally:
+`SNAKECHARM_TEST_HEAP` sets the test JVM's `maxHeapSize`; left unset, the run gets the IDE's own
+vmoptions `-Xmx` (2 GB), which is enough for a healthy suite but not for one that leaks projects.
+Locally:
 
 ```shell
 SNAKECHARM_TEST_HEAP=8g ./gradlew test --tests "features.AllCucumberFeaturesTest"   # ~24 min

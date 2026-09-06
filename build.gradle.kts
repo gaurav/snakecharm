@@ -433,6 +433,12 @@ tasks {
 
         dependsOn("buildTestWrappersBundle")
 
+        // The suite is heap-hungry: the light fixture caches a project and a mock SDK per descriptor
+        // and nothing releases them, so a bad run dies with OutOfMemoryError. Only override when asked
+        // to -- with `maxHeapSize` left unset, IntelliJPlatformArgumentProvider passes the IDE's own
+        // vmoptions -Xmx (2 GB) instead, and a hardcoded default here would silently cap it lower.
+        System.getenv("SNAKECHARM_TEST_HEAP")?.let { maxHeapSize = it }
+
         // Narrow a local run to tagged scenarios without editing AllCucumberFeaturesTest:
         // CUCUMBER_TAGS='@here' ./gradlew test --tests "features.AllCucumberFeaturesTest"
         System.getenv("CUCUMBER_TAGS")?.let { systemProperty("cucumber.filter.tags", it) }
