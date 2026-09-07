@@ -137,7 +137,10 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   same information if you need a run whose console output you no longer have — but note it is
   written when the `test` task *ends*, and on an all-green run there is no `N tests completed`
   line either (Gradle prints that only on failure), so **a run in progress looks identical to a
-  hung one**. The live signals are the test JVM's accumulating CPU time (`ps -o time=`) and the
+  hung one** — and so does one that ran nothing. `BUILD SUCCESSFUL` says only that no test failed,
+  never how many ran, and `CUCUMBER_TAGS` makes an empty run easy to reach: a tag expression
+  matching no scenario exits 0 just as loudly as a full green suite. Read the count out of the XML
+  (`<testsuite tests="…">`) before believing a green run; a full suite is 3419. The live signals are the test JVM's accumulating CPU time (`ps -o time=`) and the
   mtime of `build/test-results/test/binary/in-progress-results-generic.bin`; `jstat -gc` tells you
   whether a quiet stretch is a slow scenario or a GC death spiral. Budget generously on a
   memory-constrained machine: one all-green run measured **3h52m** on a swapping 16 GB laptop,
