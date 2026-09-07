@@ -12,10 +12,10 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
 `src/test/kotlin/features/glue/`). There is no per-feature test class.
 
 - **Run one feature:** add a `@here` tag above its `Feature:` line (or above a single `Scenario:` /
-  `Scenario Outline:`) and set `tags = "not @ignore and @here"` in `AllCucumberFeaturesTest.kt`;
-  revert both afterwards. If PR #577 lands, the runner edit becomes unnecessary — `test` there
-  forwards `CUCUMBER_TAGS='@here'` to cucumber's `cucumber.filter.tags`, which overrides the
-  annotation. Worth the trouble either way: it turns a 25-minute suite into a ~60-second one.
+  `Scenario Outline:`) and run with `CUCUMBER_TAGS='@here'`, which `test` forwards to cucumber's
+  `cucumber.filter.tags`, composed with the runner's own `not @ignore`. Revert the tag afterwards.
+  It turns a 25-minute suite into a ~60-second one. On a branch without that passthrough, set
+  `tags = "not @ignore and @here"` in `AllCucumberFeaturesTest.kt` instead and revert that too.
 - **Scenario isolation is thinner than it looks.** Every scenario asks IntelliJ's light-fixture
   framework for a test project by handing it a `LightProjectDescriptor` — the object that says
   which Python SDK and library roots the project needs. The framework hands back the *same* project
@@ -82,7 +82,8 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   Budget around 25 minutes for a warm full `test` run — but that figure assumes a **warm Gradle
   daemon**: a `cleanTest test` started against a cold one measured ~2200 of 3419 tests at 59 minutes
   on 2026.1, i.e. ~95 minutes total, with the sandbox VFS untouched. Longer again if that VFS was
-  cleared (see above: 1h24m measured). Either way, prefer the single-feature `@here` recipe while iterating. Gradle prints each failing scenario and a `N tests completed, M failed` summary, so tee
+  cleared (see above: 1h24m measured). Either way, prefer the single-feature `@here` recipe while
+  iterating. Gradle prints each failing scenario and a `N tests completed, M failed` summary, so tee
   the log and reduce it rather than parsing anything: `sed -n '/ > /s/ FAILED$//p' log | sort -u`
   gives a sorted list you can `diff` between two runs (the `/ > /` address skips Gradle's own
   `> Task :test FAILED`). Check the line count against `M failed`. See
@@ -93,7 +94,8 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   hung one** — and so does one that ran nothing. `BUILD SUCCESSFUL` says only that no test failed,
   never how many ran, and `CUCUMBER_TAGS` makes an empty run easy to reach: a tag expression
   matching no scenario exits 0 just as loudly as a full green suite. Read the count out of the XML
-  (`<testsuite tests="…">`) before believing a green run; a full suite is 3419. The live signals are the test JVM's accumulating CPU time (`ps -o time=`) and the
+  (`<testsuite tests="…">`) before believing a green run; a full suite is 3419.
+  The live signals are the test JVM's accumulating CPU time (`ps -o time=`) and the
   mtime of `build/test-results/test/binary/in-progress-results-generic.bin`; `jstat -gc` tells you
   whether a quiet stretch is a slow scenario or a GC death spiral. Budget generously on a
   memory-constrained machine: one all-green run measured **3h52m** on a swapping 16 GB laptop,
