@@ -17,7 +17,6 @@ package com.jetbrains.python
 
 import com.intellij.openapi.application.Application
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.projectRoots.ProjectJdkTable
 import com.intellij.openapi.projectRoots.Sdk
 import com.intellij.openapi.projectRoots.SdkAdditionalData
@@ -25,8 +24,6 @@ import com.intellij.openapi.projectRoots.SdkTypeId
 import com.intellij.openapi.roots.OrderRootType
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.util.containers.ContainerUtil
-import com.intellij.util.containers.MultiMap
 import com.jetbrains.python.codeInsight.typing.PyTypeShed.findAllRootsForLanguageLevel
 import com.jetbrains.python.psi.LanguageLevel
 import com.jetbrains.python.sdk.PythonSdkAdditionalData
@@ -35,8 +32,8 @@ import com.jetbrains.python.sdk.PythonSdkUtil
 import com.jetbrains.python.sdk.flavors.PyFlavorAndData
 import com.jetbrains.python.sdk.flavors.PyFlavorData
 import com.jetbrains.python.sdk.flavors.VirtualEnvSdkFlavor
+import com.jetbrains.snakecharm.SmkTestPythonHelpersLocatorFix
 import java.io.File
-
 
 /**
  * We cannot re-use PythonMockSdk because api not available in Platform artifacts
@@ -44,20 +41,15 @@ import java.io.File
  * @author yole
  */
 object PythonMockSdk {
-    private const val HELPERS_LOCATOR_EP = "com.jetbrains.python.pythonHelpersLocator"
-    private const val PRO_HELPERS_LOCATOR_FQN = "com.jetbrains.python.PythonProHelpersLocator"
-
-    private val LOG = Logger.getInstance(PythonMockSdk::class.java)
-
-    private var proHelpersLocatorRemoved = false
-
     fun create(
         testDataRoot: String,
         level: LanguageLevel = LanguageLevel.getLatest(),
         sdkNameSuffix: String = "",
         vararg additionalRoots: VirtualFile
     ): Sdk {
-        removeCrashingProHelpersLocator()
+        // Done here because this is the one point every test path funnels through: the cucumber glue
+        // calls it directly, and SnakemakeTestCase reaches it via `PyLightProjectDescriptor.getSdk()`.
+        SmkTestPythonHelpersLocatorFix.removeCrashingProHelpersLocator()
         return create(
             "Mock ${PyNames.PYTHON_SDK_ID_NAME} ${level.toPythonVersion()}$sdkNameSuffix",
             "$testDataRoot/MockSdk${level.toPythonVersion()}",
@@ -74,10 +66,6 @@ object PythonMockSdk {
          level: LanguageLevel,
         vararg additionalRoots:  VirtualFile
     ): Sdk {
-        val roots = MultiMap.create<OrderRootType, VirtualFile>()
-        roots.putValues(OrderRootType.CLASSES, createRoots(mockSdkPath, level))
-        roots.putValues(OrderRootType.CLASSES, listOf(*additionalRoots))
-
         val sdk = ProjectJdkTable.getInstance().createSdk(sdkName, sdkType)
         val sdkModificator = sdk.sdkModificator
         sdkModificator.homePath = "$mockSdkPath/bin/python${level.toPythonVersion()}"
@@ -106,85 +94,14 @@ object PythonMockSdk {
         return sdk
     }
 
-    /**
-     * Unregister the Pro `PythonProHelpersLocator` from the `com.jetbrains.python.pythonHelpersLocator`
-     * extension point (test JVM only).
-     *
-     * Creating the mock SDK triggers `PyTypeShed`'s lazy init, which calls
-     * `PythonHelpersLocator.getHelpersRoots()` — that iterates every registered locator with no
-     * exception guard. The obfuscated Pro locator's `getRoot()` calls `getPluginDistDirByClass`, which
-     * throws `IllegalStateException: .../plugins/python-ce/lib/modules should be lib directory` because the
-     * unified 2026.1 Python plugin ships its code as v2 content modules under `lib/modules/` rather than
-     * directly under `lib/`. That is purely a gradle-test-sandbox artifact (the flattened test classpath
-     * means the plugin classes aren't under a `PluginAwareClassLoader`, so the safe branch of
-     * `getPluginDistDirByClass` isn't taken; upstream
-     * https://github.com/JetBrains/intellij-platform-gradle-plugin/issues/2070, unfixed). Unlike the
-     * community locator it reads no `idea.python.helpers.path` property, so it can't be pointed at a
-     * valid root. Removing just this one dynamic EP leaves the community locator (fed by the
-     * `-Didea.python.helpers.path` jvmArg) and the rest of the Pro Python plugin intact, so Python
-     * resolution still works. Idempotent — safe to call before every SDK creation. Runtime is unaffected.
-     *
-     * This lives here rather than in a test-case base class because [create] is the one point every
-     * test path funnels through: the cucumber glue calls it directly, and [com.jetbrains.snakecharm.SnakemakeTestCase]
-     * reaches it via `PyLightProjectDescriptor.getSdk()`.
-     */
-    private fun removeCrashingProHelpersLocator() {
-        if (proHelpersLocatorRemoved) {
-            return
-        }
-        val ep = ApplicationManager.getApplication()?.extensionArea
-            ?.getExtensionPointIfRegistered<Any>(HELPERS_LOCATOR_EP)
-        if (ep == null) {
-            warnRemovalDidNothing("extension point '$HELPERS_LOCATOR_EP' is not registered")
-            return
-        }
-        ep.unregisterExtensions(
-            { className, _ ->
-                val isProLocator = className == PRO_HELPERS_LOCATOR_FQN
-                if (isProLocator) {
-                    proHelpersLocatorRemoved = true
-                }
-                !isProLocator
-            },
-            false,
-        )
-        if (!proHelpersLocatorRemoved) {
-            warnRemovalDidNothing("no extension named '$PRO_HELPERS_LOCATOR_FQN' is registered on it")
-        }
-    }
-
-    /**
-     * Both anchors of [removeCrashingProHelpersLocator] are Pro-plugin internals with no compile-time
-     * check, so a rename in a platform update turns the removal into a silent no-op. Say so out loud:
-     * the opaque `... should be lib directory` crash it guards against takes the whole suite down
-     * without naming a cause, and this line sits in the log right before it.
-     *
-     * A warning rather than a failure because the locator legitimately does not exist on every
-     * platform (e.g. `platformType = PC` / IDEA + community PythonCore, which never had it).
-     */
-    private fun warnRemovalDidNothing(reason: String) {
-        LOG.warn(
-            "PythonProHelpersLocator was not unregistered: $reason. Harmless if this platform has no " +
-                    "Pro Python plugin; otherwise the class or EP name changed and the removal is a no-op " +
-                    "-- expect PyTypeShed init to fail with 'IllegalStateException: .../lib/modules should " +
-                    "be lib directory' across the whole suite. Fix the names in PythonMockSdk."
-        )
-    }
-
     private fun toVersionString( level: LanguageLevel) = "Python ${level.toPythonVersion()}"
 
     private fun createRoots( mockSdkPath: String,  level: LanguageLevel): List<VirtualFile> {
-        val result = ArrayList<VirtualFile>()
         val localFS = LocalFileSystem.getInstance()
-        ContainerUtil.addIfNotNull(
-            result, localFS.refreshAndFindFileByIoFile(File(mockSdkPath, "Lib"))
-        )
-        ContainerUtil.addIfNotNull(
-            result,
+        return listOfNotNull(
+            localFS.refreshAndFindFileByIoFile(File(mockSdkPath, "Lib")),
             localFS.refreshAndFindFileByIoFile(File(mockSdkPath, PythonSdkUtil.SKELETON_DIR_NAME))
-        )
-        result.addAll(findAllRootsForLanguageLevel(level))
-        return result
+        ) + findAllRootsForLanguageLevel(level)
     }
 
     private class PyMockSdkType(
