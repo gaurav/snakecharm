@@ -17,6 +17,7 @@ package com.jetbrains.python
 
 import com.intellij.openapi.application.Application
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.projectRoots.ProjectJdkTable
 import com.intellij.openapi.projectRoots.Sdk
 import com.intellij.openapi.projectRoots.SdkAdditionalData
@@ -43,6 +44,13 @@ import java.io.File
  * @author yole
  */
 object PythonMockSdk {
+    private const val HELPERS_LOCATOR_EP = "com.jetbrains.python.pythonHelpersLocator"
+    private const val PRO_HELPERS_LOCATOR_FQN = "com.jetbrains.python.PythonProHelpersLocator"
+
+    private val LOG = Logger.getInstance(PythonMockSdk::class.java)
+
+    private var proHelpersLocatorRemoved = false
+
     fun create(
         testDataRoot: String,
         level: LanguageLevel = LanguageLevel.getLatest(),
@@ -121,11 +129,45 @@ object PythonMockSdk {
      * reaches it via `PyLightProjectDescriptor.getSdk()`.
      */
     private fun removeCrashingProHelpersLocator() {
+        if (proHelpersLocatorRemoved) {
+            return
+        }
         val ep = ApplicationManager.getApplication()?.extensionArea
-            ?.getExtensionPointIfRegistered<Any>("com.jetbrains.python.pythonHelpersLocator") ?: return
+            ?.getExtensionPointIfRegistered<Any>(HELPERS_LOCATOR_EP)
+        if (ep == null) {
+            warnRemovalDidNothing("extension point '$HELPERS_LOCATOR_EP' is not registered")
+            return
+        }
         ep.unregisterExtensions(
-            { className, _ -> className != "com.jetbrains.python.PythonProHelpersLocator" },
+            { className, _ ->
+                val isProLocator = className == PRO_HELPERS_LOCATOR_FQN
+                if (isProLocator) {
+                    proHelpersLocatorRemoved = true
+                }
+                !isProLocator
+            },
             false,
+        )
+        if (!proHelpersLocatorRemoved) {
+            warnRemovalDidNothing("no extension named '$PRO_HELPERS_LOCATOR_FQN' is registered on it")
+        }
+    }
+
+    /**
+     * Both anchors of [removeCrashingProHelpersLocator] are Pro-plugin internals with no compile-time
+     * check, so a rename in a platform update turns the removal into a silent no-op. Say so out loud:
+     * the opaque `... should be lib directory` crash it guards against takes the whole suite down
+     * without naming a cause, and this line sits in the log right before it.
+     *
+     * A warning rather than a failure because the locator legitimately does not exist on every
+     * platform (e.g. `platformType = PC` / IDEA + community PythonCore, which never had it).
+     */
+    private fun warnRemovalDidNothing(reason: String) {
+        LOG.warn(
+            "PythonProHelpersLocator was not unregistered: $reason. Harmless if this platform has no " +
+                    "Pro Python plugin; otherwise the class or EP name changed and the removal is a no-op " +
+                    "-- expect PyTypeShed init to fail with 'IllegalStateException: .../lib/modules should " +
+                    "be lib directory' across the whole suite. Fix the names in PythonMockSdk."
         )
     }
 
