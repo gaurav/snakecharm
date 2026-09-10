@@ -6,7 +6,6 @@ import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.PsiTreeUtil
 import com.jetbrains.python.PyPsiBundle
-import com.jetbrains.python.psi.PyReturnStatement
 import com.jetbrains.snakecharm.lang.psi.SmkFile
 import com.jetbrains.snakecharm.lang.psi.SmkRunSection
 import com.jetbrains.snakecharm.lang.psi.SmkWorkflowPythonBlockSection
@@ -30,6 +29,9 @@ import com.jetbrains.snakecharm.lang.psi.SmkWorkflowPythonBlockSection
  * error being hidden.
  */
 class SmkReturnHighlightInfoFilter : HighlightInfoFilter {
+    /** Resolved once: [accept] runs on every highlight of every pass, the message never changes. */
+    private val returnOutsideOfFunctionMessage by lazy { PyPsiBundle.message("ANN.return.outside.of.function") }
+
     override fun accept(highlightInfo: HighlightInfo, file: PsiFile?): Boolean {
         if (file !is SmkFile) {
             return true
@@ -37,18 +39,17 @@ class SmkReturnHighlightInfoFilter : HighlightInfoFilter {
         if (highlightInfo.severity != HighlightSeverity.ERROR) {
             return true
         }
-        if (highlightInfo.description != PyPsiBundle.message("ANN.return.outside.of.function")) {
+        if (highlightInfo.description != returnOutsideOfFunctionMessage) {
             return true
         }
 
         val element = file.findElementAt(highlightInfo.actualStartOffset) ?: return true
-        val returnStatement = PsiTreeUtil.getParentOfType(element, PyReturnStatement::class.java) ?: return true
 
-        val inRunOrPythonBlock = PsiTreeUtil.getParentOfType(
-            returnStatement, SmkRunSection::class.java, SmkWorkflowPythonBlockSection::class.java
-        ) != null
-
-        // Reject (hide) the highlight only when the 'return' is inside a run/python block.
-        return !inRunOrPythonBlock
+        // Reject (hide) the highlight only when it is inside a run/python block. The description check
+        // above already established that this is the 'return outside of function' error, so there is
+        // nothing to gain from locating the PyReturnStatement itself first.
+        return PsiTreeUtil.getParentOfType(
+            element, SmkRunSection::class.java, SmkWorkflowPythonBlockSection::class.java
+        ) == null
     }
 }
