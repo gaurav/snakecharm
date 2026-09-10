@@ -311,8 +311,9 @@ kotlin {
 }
 
 // The production wrappers bundle needs a local snakemake-wrappers checkout (see DEVELOPER.md); CI
-// provides one. Read once here so both `buildWrappersBundle` and `prepareSandbox` gate on it. See #571.
+// provides one. See #571.
 val wrappersRepoPath = gradlePropertyOptional("snakemakeWrappersRepoPath")?.takeIf { it.isNotBlank() }
+val wrappersBundleFile = layout.buildDirectory.file("bundledWrappers/smk-wrapper-storage-bundled.cbor")
 
 tasks {
 
@@ -360,14 +361,24 @@ tasks {
                         "name completion will be unavailable). " +
                         "Pass -PsnakemakeWrappersRepoPath=<snakemake-wrappers checkout> to include them. See #571."
                 )
+                // Drop a bundle left by an earlier run that did have the property, so prepareSandbox
+                // cannot pack a stale one whose embedded repo version disagrees with gradle.properties.
+                wrappersBundleFile.get().asFile.delete()
             }
             wrappersRepoPath != null
         }
 
+        // Declared so `prepareSandbox` can wire itself to this task by its output (which carries the
+        // task dependency) instead of a hand-written `dependsOn` plus a literal path. The crawler
+        // reads a whole external repo, so there is nothing cheap to hash as an input -- never claim
+        // to be up to date rather than risk shipping a silently stale bundle.
+        outputs.file(wrappersBundleFile)
+        outputs.upToDateWhen { false }
+
         args(
             wrappersRepoPath ?: "",
             gradleProperty("snakemakeWrappersRepoVersion").get(),
-            layout.buildDirectory.file("bundledWrappers/smk-wrapper-storage-bundled.cbor").get(),
+            wrappersBundleFile.get(),
             layout.projectDirectory.file("snakemake_api.yaml")
         )
         maxHeapSize = "1024m" // Not much RAM is available on TC agents
@@ -398,27 +409,12 @@ tasks {
 
 
     prepareSandbox {
-        // Pack wrappers bundle into plugin, but only when this build actually produced one. Gating
-        // here (rather than deleting a stale bundle from buildWrappersBundle's onlyIf) covers the
-        // common case: with `snakemakeWrappersRepoPath` unset, a bundle left by an earlier run that
-        // did have the property is not packed, so the plugin can't ship a wrappers list whose repo
-        // version disagrees with gradle.properties. It does NOT cover an explicit
-        // `-x buildWrappersBundle` *with* the property set — there the `from(...)` is registered and
-        // a stale bundle would still be packed. That excluding is a deliberate act; if you do it,
-        // delete build/bundledWrappers/ first.
-        //
-        // The `dependsOn` is required: `from(<file provider>)` carries no task dependency, and
-        // buildWrappersBundle declares no outputs, so without it the bundle is never built and Copy
-        // silently packs nothing. Verify with `./gradlew -m prepareSandbox -PsnakemakeWrappersRepoPath=...`.
-        // It is unconditional so that with the property unset buildWrappersBundle still enters the
-        // task graph and its `onlyIf` runs -- that block is the only place the "no wrappers bundled"
-        // warning is logged, and gating the dependency on the property would silence it in exactly
-        // the case it exists for.
-        dependsOn("buildWrappersBundle")
-        if (wrappersRepoPath != null) {
-            from(layout.buildDirectory.file("bundledWrappers/smk-wrapper-storage-bundled.cbor")) {
-                into(pluginName.map { "$it/extra" })
-            }
+        // Pack the wrappers bundle into the plugin. Wiring to the *task* rather than to a path carries
+        // the task dependency, keeps buildWrappersBundle in the graph so its `onlyIf` still logs the
+        // "no wrappers bundled" warning, and packs nothing when that `onlyIf` skipped it -- the skip
+        // deletes any bundle an earlier run left behind, so there is no stale file to pick up.
+        from(named("buildWrappersBundle")) {
+            into(pluginName.map { "$it/extra" })
         }
         from(layout.projectDirectory.file("snakemake_api.yaml")) {
             into(pluginName.map { "$it/extra" })
