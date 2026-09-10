@@ -121,7 +121,7 @@ class SmkRuleLikeSectionArgsType(
     override fun getCompletionVariantsAndPriority(
         completionPrefix: String?,
         location: PsiElement,
-        context: ProcessingContext?,
+        context: ProcessingContext,
     ): Pair<List<LookupElementBuilder>, Double> {
         val priority = SmkCompletionUtil.SECTIONS_KEYS_PRIORITY
 
