@@ -140,11 +140,12 @@ class SmkWrapperStorage(val project: Project) : Disposable {
         /**
          * A plugin with no bundled wrappers leaves [wrappers] empty, so the `storage.wrappers.isNotEmpty()`
          * fast path in [loadOrCollectLocalWrappers] never trips and we re-check the missing file on every
-         * settings change. Warn once *per path* instead of filling idea.log with the same line: this
-         * object is JVM-wide, so a single flag would also swallow the warning for a genuinely different
-         * path — another open project, or an installation whose sandbox path changed under a plugin update.
+         * settings change. Warn once instead of filling idea.log with the same line. One flag is enough:
+         * the path is derived from this class' own install location, so it is the same for every open
+         * project, and a plugin update that moves it also gives the companion a fresh classloader.
          */
-        private val missingBundleWarnedPaths: MutableSet<Path> = ConcurrentHashMap.newKeySet<Path>()
+        @Volatile
+        private var missingBundleWarned = false
 
         fun getInstance(project: Project) = project.getService(SmkWrapperStorage::class.java)!!
 
@@ -217,7 +218,8 @@ class SmkWrapperStorage(val project: Project) : Disposable {
                 // A plugin built without `-PsnakemakeWrappersRepoPath` has no bundle (see #571), which is
                 // now the default for a local build. Degrade to "no wrappers known" instead of throwing
                 // out of the background wrapper-collection task.
-                if (missingBundleWarnedPaths.add(wrappersBundlePath)) {
+                if (!missingBundleWarned) {
+                    missingBundleWarned = true
                     LOGGER.warn(
                         "Missing wrappers bundle in plugin bundle: '$wrappersBundlePath' doesn't exist. " +
                                 "Wrapper name completion will be unavailable."
@@ -231,11 +233,18 @@ class SmkWrapperStorage(val project: Project) : Disposable {
         }
 
 
+        /**
+         * Bundles are immutable for the life of the JVM (they ship inside the plugin, or -- in tests --
+         * are produced by a gradle task before the run), but [loadOrCollectLocalWrappers] re-reads one
+         * on every settings change, and in unit-test mode once per scenario. Decode each path once.
+         */
+        private val deserializedBundles = ConcurrentHashMap<Path, Pair<String, List<WrapperInfo>>>()
+
         @ExperimentalSerializationApi
         private fun deserializeWrappers(storagePath: Path) =
-            Cbor.decodeFromByteArray<Pair<String, List<WrapperInfo>>>(
-                Files.readAllBytes(storagePath)
-            )
+            deserializedBundles.computeIfAbsent(storagePath) {
+                Cbor.decodeFromByteArray<Pair<String, List<WrapperInfo>>>(Files.readAllBytes(it))
+            }
 
         @Suppress("unused")
         @ExperimentalSerializationApi
