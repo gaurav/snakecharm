@@ -178,7 +178,9 @@ If you get `Unimplemented substep definition` in all `*.feature` files, ensure:
     classpaths. Re-read both from the new IDE rather than guessing:
     ```shell
     unzip -p <ide>/lib/intellij.libraries.kotlinx.serialization.core.jar META-INF/MANIFEST.MF | grep Implementation-Version
-    ls <ide>/lib/kotlin-stdlib-*.jar
+    # kotlin-stdlib ships merged into lib/util-8.jar, not as its own jar, and carries no manifest
+    # version -- read the three ints KotlinVersion is constructed from (e.g. 2 / 3 / 20 -> 2.3.20):
+    javap -p -c -cp <ide>/lib/util-8.jar kotlin.KotlinVersionCurrentValue | sed -n '/KotlinVersion get/,/areturn/p'
     ```
     Leaving them stale does not fail the build; it fails at *runtime*, in tests, with an error that
     names neither this plugin nor the library — a `@DebugMetadata` version mismatch for the stdlib,
