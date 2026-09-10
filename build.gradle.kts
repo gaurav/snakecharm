@@ -479,9 +479,5 @@ tasks {
         // forever instead of listing the platform we actually build against.
         types = listOf(IntelliJPlatformType.fromCode(gradlePropertyWithPriorityToSystemProperty("platformType")))
         untilBuild = provider { null }
-
-        doLast {
-            val latestEap = productsReleases.get().max()
-        }
     }
 }
