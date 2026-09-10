@@ -34,7 +34,7 @@ class SmkReturnHighlightInfoFilter : HighlightInfoFilter {
         if (file !is SmkFile) {
             return true
         }
-        if (highlightInfo.severity !== HighlightSeverity.ERROR) {
+        if (highlightInfo.severity != HighlightSeverity.ERROR) {
             return true
         }
         if (highlightInfo.description != PyPsiBundle.message("ANN.return.outside.of.function")) {
