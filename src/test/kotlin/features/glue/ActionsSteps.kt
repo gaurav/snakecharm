@@ -337,24 +337,14 @@ class ActionsSteps {
         return pos + posInSignature
     }
 
-    @When("^I check highlighting (error|warning|info|weak warning)s$")
-    fun iCheckHighlighting(level: String) {
-        checkHighlighting(setOf(level), false)
-    }
-
-    @When("^I check highlighting (error|warning|info|weak warning)s ignoring extra highlighting$")
-    fun iCheckHighlightingIgnoreExtra(type: String) {
-        checkHighlighting(setOf(type), true)
-    }
-
     /**
-     * For highlights the platform demoted to weak warning (see #584) in a scenario that also has to
-     * stay sensitive to stray plain warnings: `checkHighlighting` reports only the severities asked
-     * for, so asking for weak warnings alone would stop asserting anything at WARNING level.
+     * Several severities can be asked for at once ("warnings and weak warnings"): `checkHighlighting`
+     * reports only the severities asked for, so a scenario whose highlight the platform demoted to weak
+     * warning (see #584) but which must stay sensitive to stray plain warnings has to request both.
      */
-    @When("^I check highlighting warnings and weak warnings$")
-    fun iCheckHighlightingWarningsAndWeakWarnings() {
-        checkHighlighting(setOf("warning", "weak warning"), false)
+    @When("^I check highlighting ((?:error|warning|info|weak warning)s(?: and (?:error|warning|info|weak warning)s)*)( ignoring extra highlighting)?$")
+    fun iCheckHighlighting(levels: String, ignoreExtra: String?) {
+        checkHighlighting(levels.split(" and ").map { it.removeSuffix("s") }.toSet(), ignoreExtra != null)
     }
 
     private fun checkHighlighting(levels: Set<String>, ignoreExtra: Boolean) {
