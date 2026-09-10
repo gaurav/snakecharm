@@ -83,6 +83,13 @@ structural moves:
   every bump, or those users silently keep building on the old JDK.
 - `gradle.properties`: `platformType = PY`, `platformVersion = 2026.1.3`, `pluginSinceBuild = 261`,
   `pluginUntilBuild = 261.*`, `pluginVersion = 2026.1.0`.
+  - **`PC → PY` costs a compile-time guardrail.** With `PC` the compile classpath was
+    `bundledPlugin("PythonCore")`, so a Professional-only Python API used from `src/main` failed the
+    build. On `PY` it is `Pythonid`, while `plugin.xml` still declares only
+    `<depends>PythonCore</depends>` and we still support IDEA + the community Python plugin. Such a
+    call now compiles *and* passes the suite (the Gradle test classpath is flat) and fails only at
+    runtime, for those users, with `NoClassDefFoundError`. There is no community 2026.1 artifact to
+    build against, so this has to be watched by hand in review.
 - `build.gradle.kts`: adapted to plugin-2.16.0 / Gradle-9.6 API changes, plus a runtime-only
   `resolutionStrategy` forcing kotlin-stdlib and kotlinx-serialization to the platform's versions
   (see test break 6, and #587 for the serialization half); also

@@ -146,6 +146,14 @@ dependencies {
         }
 
         // Plugin Dependencies. Uses `platformPlugins` property from the gradle.properties file.
+        //
+        // NB: on "PY"/"PD" the compile classpath is `Pythonid` (Python Professional), while
+        // plugin.xml declares only `<depends>PythonCore</depends>` and the `else ->` branch still
+        // targets IDEA + the community Python plugin. So the compiler no longer rejects a
+        // Professional-only Python API used from `src/main`: it compiles, and the tests pass (their
+        // classpath is flat), but it would throw NoClassDefFoundError for users on IDEA + PythonCore.
+        // Since 2026.1 there is no community PyCharm artifact to build against, so keep that
+        // restriction in mind by hand -- everything in `src/main` must stay within PythonCore's API.
         when (platformType) {
             "PC" -> bundledPlugin("PythonCore")
             "PY", "PD" -> {
