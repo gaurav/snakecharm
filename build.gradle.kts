@@ -107,10 +107,15 @@ configurations.matching { it.name.endsWith("RuntimeClasspath", ignoreCase = true
 
 
 // The platform types whose IDE *is* a Python IDE, i.e. the ones that bundle the Python plugin (and
-// therefore its `helpers` directory) as part of the distribution: PyCharm Community, PyCharm
-// Professional and DataSpell. Anything else (IDEA + the external Python plugin) is laid out
-// differently. Keep this in sync with the `when (platformType)` below.
-val isPyCharmPlatform = gradlePropertyWithPriorityToSystemProperty("platformType") in setOf("PC", "PY", "PD")
+// therefore its `helpers` directory) as part of the distribution. Anything else (IDEA + the external
+// Python plugin) is laid out differently. Goes through the plugin's own enum rather than re-listing
+// the codes, so a typo in `platformType` fails loudly here instead of silently picking "not PyCharm".
+val isPyCharmPlatform = IntelliJPlatformType.fromCode(gradlePropertyWithPriorityToSystemProperty("platformType")) in
+        setOf(
+            IntelliJPlatformType.PyCharmCommunity,
+            IntelliJPlatformType.PyCharmProfessional,
+            IntelliJPlatformType.DataSpell,
+        )
 
 dependencies {
     implementation(libs.kotlinStdlibJdk8)
