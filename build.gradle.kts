@@ -96,8 +96,9 @@ configurations.matching { it.name.endsWith("RuntimeClasspath", ignoreCase = true
         // cbor, so the pair stays consistent) to the platform's version fixes the direction of the
         // skew: a newer core runs older generated code fine.
         //
-        // `cbor` in the version catalog is already 1.9.0, so today these forces are a no-op; they are
-        // what keeps a future catalog bump, or a transitive downgrade, from reintroducing the skew.
+        // Our own `kotlinxCbor` already resolves to this version (the catalog points it at the same
+        // key), so today these forces are a no-op; they are what keeps a transitive dependency from
+        // dragging a different serialization version in and reintroducing the skew.
         // Measured on #577 (2026.2), where the same skew was live: forcing this removed 101 failures.
         // See #587.
         force("org.jetbrains.kotlinx:kotlinx-serialization-core:$kotlinxSerializationPlatformVersion")
