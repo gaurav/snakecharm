@@ -453,17 +453,16 @@ tasks {
         jvmArgumentProviders += CommandLineArgumentProvider {
             val pythonHelpersPath = intellijPlatform.platformPath.resolve("plugins/python-ce/helpers")
             if (pythonHelpersPath.isDirectory()) {
-                listOf("-Didea.python.helpers.path=$pythonHelpersPath")
-            } else {
-                if (isPyCharmPlatform) {
-                    Logging.getLogger("snakecharm").warn(
-                        "Python helpers not found at $pythonHelpersPath, so -Didea.python.helpers.path is not set. " +
-                                "Tests that infer Python types will fail with " +
-                                "\"IllegalStateException: ... should be lib directory\"."
-                    )
-                }
-                emptyList()
+                return@CommandLineArgumentProvider listOf("-Didea.python.helpers.path=$pythonHelpersPath")
             }
+            if (isPyCharmPlatform) {
+                Logging.getLogger("snakecharm").warn(
+                    "Python helpers not found at $pythonHelpersPath, so -Didea.python.helpers.path is not set. " +
+                            "Tests that infer Python types will fail with " +
+                            "\"IllegalStateException: ... should be lib directory\"."
+                )
+            }
+            emptyList()
         }
 
         reports {
