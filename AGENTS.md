@@ -281,6 +281,20 @@ the entry class for any feature is to grep that file.
   `PluginGeneratedSerialDescriptor.kt`, which names neither this plugin nor serialization, and (see the
   bullet below) takes hundreds of unrelated scenarios down with it. Issue #587 is the write-up; it cost
   101 failures on the 2026.2 port.
+- **A patch release is worth the same two checks, and they are cheap.** A `2026.2.1` → `2026.2.2`
+  bump moves `platformVersion` only — the build number stays `262.x`, so `pluginSinceBuild` /
+  `pluginUntilBuild` and the manifest do not move — but the bundled libraries above still can.
+  Rather than hunting version strings, diff the jars between the two downloaded distributions
+  (`shasum -a 256 lib/intellij.libraries.kotlinx.serialization.core.jar` in each): byte-identical
+  means nothing moved. That detour is worth taking because `kotlin-stdlib` is not shipped as a jar
+  carrying `Implementation-Version` at all — on 2026.2 it is folded into `lib/util-8.jar`, which has
+  no manifest, and the version is only readable by decompiling `kotlin.KotlinVersionCurrentValue`.
+  Then run the full suite against it: 2026.2.2 was green at the same count with no source change.
+- **`./gradlew printProductsReleases` lists what the build asks it to list.** It is configured here
+  for the RELEASE and EAP channels; with EAP alone it once reported a 262 build *older* than the one
+  being built against, which reads as "you are up to date" and is not. For what is actually
+  released, `https://data.services.jetbrains.com/products/releases?code=PY&type=release&latest=false`
+  gives version, build number and date.
 - **Logged errors are test failures.** `TestLoggerFactory` promotes anything logged at error level to
   a failed scenario, so one benign platform log can fail hundreds of unrelated tests. When triaging a
   wall of failures, group by exception message first — it is usually one cause, not many.

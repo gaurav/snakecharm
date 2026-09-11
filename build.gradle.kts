@@ -505,7 +505,11 @@ tasks {
     }
 
     printProductsReleases {
-        channels = listOf(ProductRelease.Channel.EAP)
+        // Both channels: EAP answers "what is coming", RELEASE answers "what is the newest build I
+        // could target right now", and the two have different newest builds. EAP alone is actively
+        // misleading -- with 2026.2.2 (262.10315.174) already out, an EAP-only run reported
+        // 262.8665.97 as the newest 262, i.e. a build *older* than the one being built against.
+        channels = listOf(ProductRelease.Channel.RELEASE, ProductRelease.Channel.EAP)
         // Follow `platformType` rather than hardcoding one: PyCharm Community (`PC`) publishes
         // nothing from 2025.3 on, so a hardcoded `PyCharmCommunity` would report "no newer release"
         // forever instead of listing the platform we actually build against.
