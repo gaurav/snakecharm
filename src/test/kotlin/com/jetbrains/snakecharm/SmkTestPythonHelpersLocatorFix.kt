@@ -25,8 +25,9 @@ import java.nio.file.Path
  * Both are gradle-test-sandbox artifacts of the same upstream bug — the flattened test classpath means
  * the plugin classes aren't under a `PluginAwareClassLoader`, so the safe branch of
  * `getPluginDistDirByClass` isn't taken
- * ([intellij-platform-gradle-plugin#2070](https://github.com/JetBrains/intellij-platform-gradle-plugin/issues/2070),
- * unfixed). Runtime is unaffected by either.
+ * ([intellij-platform-gradle-plugin#2183](https://github.com/JetBrains/intellij-platform-gradle-plugin/issues/2183),
+ * open; the earlier #2070 was closed as a duplicate of it on 2026-09-11, *not* fixed — don't read
+ * that closure as a reason to drop this). Runtime is unaffected by either.
  *
  * Kept out of `com.jetbrains.python.PythonMockSdk` -- that file is a vendored copy of a JetBrains
  * class, and every line of ours in it is a line to re-merge the next time it is re-vendored.

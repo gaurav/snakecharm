@@ -98,7 +98,7 @@ structural moves:
 2. **The Python plugin was repackaged as v2 content modules** — its code now lives in
    `.../python-ce/lib/modules/*.jar` and `.../python/lib/modules/*.jar` rather than directly under
    `lib/`. → **the `PlatformLiteFixture` removal, the test-data-path extra directory level, and
-   both `PyTypeShed` helpers-locator crashes** (upstream gradle-plugin #2070).
+   both `PyTypeShed` helpers-locator crashes** (upstream gradle-plugin #2183).
 3. **The bundled toolchain was upgraded**: Kotlin `2.3.20` (coroutine `@DebugMetadata` v2) and a
    newer bundled typeshed (single-file stubs became *package* stubs).
 
@@ -217,10 +217,13 @@ structural moves:
 
 ### Related work & open items
 
-- **Upstream gradle-plugin [#2070](https://github.com/JetBrains/intellij-platform-gradle-plugin/issues/2070)** —
+- **Upstream gradle-plugin [#2183](https://github.com/JetBrains/intellij-platform-gradle-plugin/issues/2183)** —
   the root cause of the helpers-locator crashes (v2 content-module jars on a flat test classpath).
-  If fixed upstream, the EP-unregister workaround (break 8) could be dropped. Worth retrying with a
-  newer IntelliJ Platform Gradle Plugin (`2.16 → 2.17`, the build nags) and/or a newer `2026.1.x`.
+  Still open. The issue we originally tracked, [#2070](https://github.com/JetBrains/intellij-platform-gradle-plugin/issues/2070),
+  was closed on 2026-09-11 **as a duplicate of #2183, not as fixed** — a closed upstream link is not
+  evidence the workaround can go. If #2183 is fixed, the EP-unregister workaround (break 8) and the
+  EP-registration half on 2026.2 could both be dropped; re-check on each IntelliJ Platform Gradle
+  Plugin bump.
 - **The pre-existing bare-`snakemake`/`MockPackages3` fixture gap** — a missing test fixture rather
   than a port defect, filed as [#575](https://github.com/JetBrains-Research/snakecharm/issues/575)
   with the setup fix in [#574](https://github.com/JetBrains-Research/snakecharm/pull/574) and the
