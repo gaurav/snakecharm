@@ -153,7 +153,7 @@ dependencies {
 
         // Plugin Dependencies. Uses `platformPlugins` property from the gradle.properties file.
         //
-        // NB: on "PY"/"PD" the compile classpath is `Pythonid` (Python Professional), while
+        // NB: on "PY"/"DS" the compile classpath is `Pythonid` (Python Professional), while
         // plugin.xml declares only `<depends>PythonCore</depends>` and the `else ->` branch still
         // targets IDEA + the community Python plugin. So the compiler no longer rejects a
         // Professional-only Python API used from `src/main`: it compiles, and the tests pass (their
@@ -162,7 +162,13 @@ dependencies {
         // restriction in mind by hand -- everything in `src/main` must stay within PythonCore's API.
         when (platformType) {
             "PC" -> bundledPlugin("PythonCore")
-            "PY", "PD" -> {
+            // NB: keep these codes in sync with `isPyCharmPlatform` above -- they are the same
+            // question asked twice. "DS" (DataSpell) is a Python IDE built on Professional, so it
+            // bundles `Pythonid` like "PY" does; anything reaching `else` is IDEA + the external
+            // Python plugin. There is no "PD" code (see IntelliJPlatformType), and one used to be
+            // listed here: `fromCode` would have thrown at configuration time long before the
+            // branch could ever be taken.
+            "PY", "DS" -> {
                 bundledPlugin("Pythonid")
 
                 // TODO??? cleanup? check tests runing or not:
