@@ -401,6 +401,40 @@ pushes a default (disabled) state explicitly.
 Worth remembering when the next test starts failing "because of" a fix: a shared-project test suite
 can hold assertions that only hold while something else is broken.
 
+### 14. `PyAnnotator` and `ReturnAnnotator` were removed — FIXED
+
+`com.jetbrains.python.validation.PyAnnotator` exists in 2026.1.3 and is gone in 2026.2. It was the
+base class every SnakeCharm annotator extended, supplying `annotateElement()`,
+`addHighlightingAnnotation()` and the `holder` field — 22 of the 25 compile errors on the first
+build. The platform moved its own annotators to a plain `PyElementVisitor` that takes a
+`PyAnnotationHolder` at construction (e.g. `PyReturnYieldAnnotatorVisitor`), which is the shape
+adopted here: `SmkAnnotatorBase` holds the holder and re-exposes the `addHighlightingAnnotation`
+overloads, so the annotator bodies did not change. The remaining 3 errors were
+`SmkSLSubscriptionExpression.acceptPyVisitor` taking a non-null `PyAstElementVisitor`.
+
+The `ReturnAnnotator` extension point went with it; its "'return' outside of function" check moved
+into the final `PySyntaxAnnotator`. The false positive for `return` inside snakemake `run:` /
+`onstart` / `onerror` / `onsuccess` is now suppressed by a `daemon.highlightInfoFilter`
+(`SmkReturnHighlightInfoFilter`) rather than by a custom annotator. `return_annotator.feature`
+covers both directions — the suppression, and that a `yield` outside a function is still reported.
+
+**The cost that came with it, and that this port paid twice.** Binding the holder at construction
+means annotators can no longer be singletons, and `Annotator.annotate()` is called once per PSI
+*element*, not once per pass — so the naive port allocates a holder and a visitor set for every
+element of every file it is registered against, on every highlighting pass:
+
+- `SmkSLAnnotatingVisitor` is registered against `language="Python"` with no file guard, so it did
+  that for every `.py` file in the project, for users who never open a Snakefile. It now checks the
+  containing file first (safe: `SmkSLInjector.isValidForInjection` gates injection on
+  `isInsideSmkFile`, so SmkSL never appears outside a Snakemake file).
+- `SmkAnnotatorManager` had the `file is SmkFile` guard from the start, which bounds the waste to
+  Snakefiles but does not remove it. It now caches the visitors on `AnnotationHolder`'s
+  `currentAnnotationSession` — the same scope as the holder they capture, one file and one pass.
+  The visitors keep no state between elements, so sharing them within a pass is safe.
+
+Rule for anything registered as an `Annotator`: **`annotate()` is a per-element callback.** Whatever
+it builds, it builds hundreds of thousands of times. Guard on the file first, then cache per session.
+
 ### Method note: cluster failure *messages*, not test names
 
 Grouping the 145 failures by feature made them look like one big resolve problem. Grouping by the

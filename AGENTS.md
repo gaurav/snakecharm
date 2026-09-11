@@ -205,7 +205,12 @@ latest one the plugin officially supports.
 Feature areas (each maps to a source package and a `features/` test dir):
 
 - `lang/highlighter/`, `lang/validation/` — syntax highlighting + annotators (registered against
-  Python; some run through `SmkStandardAnnotatorManager` / `SmkDumbAwareAnnotatorManager`).
+  Python; some run through `SmkStandardAnnotatorManager` / `SmkDumbAwareAnnotatorManager`). Since
+  2026.2 removed `PyAnnotator`, these are `PyElementVisitor`s that take their `PyAnnotationHolder`
+  at construction, so they cannot be singletons — and `Annotator.annotate()` is a **per-element**
+  callback, so anything built inside it is built once per PSI element per highlighting pass. Guard
+  on the containing file first, then cache per `AnnotationHolder.currentAnnotationSession`. Both
+  halves of that have been missed once each (`PORTING.md` → "2026.2", item 14).
 - `codeInsight/` — completion contributors and resolve for Snakemake magic (`config`, `rules`,
   `rules.<name>.<section>`, wildcards, api methods like `expand`/`temp`, wrapper names). The implicit
   "runtime magic" symbols (`expand`, `temp`, `config`, `rules`, …) are built by
