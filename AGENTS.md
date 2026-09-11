@@ -48,6 +48,17 @@ TeamCity it comes from the wrappers VCS root — see issue #571). The test-only 
 (`:buildTestWrappersBundle`, what `test` actually consumes) defaults to `testData/wrappers_storage`
 and needs no property.
 
+`prepareSandbox` reaches that bundle through `from(named("buildWrappersBundle"))`, which works only
+because the task declares the file as `outputs.file(...)` — `from(<file provider>)` carries no task
+dependency, and dropping the dependency produces a wrapper-less plugin *silently*, which has
+happened twice (#588, #591). Two things not to "tidy up" there, both of which have been tried and
+reverted: the `from(...)` must stay **unconditional**, or `buildWrappersBundle` leaves the task graph
+when `snakemakeWrappersRepoPath` is unset and its `onlyIf` — the only place the "no wrappers bundled"
+warning is logged — never runs; and `outputs.upToDateWhen { false }` must stay, because declaring
+the wrappers checkout as an input is what lets Gradle skip the crawler and ship a stale bundle. The
+`onlyIf` deletes any bundle an earlier run left behind; that is what keeps a stale one out, not a
+gate around the copy.
+
 **CLI build memory:** if `:compileKotlin` dies with `OutOfMemoryError: GC overhead limit exceeded`,
 give the Kotlin daemon more heap — append `-Pkotlin.daemon.jvmargs=-Xmx4g` (transforming some large
 generated methods can exhaust the default heap).
@@ -197,7 +208,10 @@ the entry class for any feature is to grep that file.
   don't re-hardcode a range there or the task starts failing against IDEs that can no longer install
   the plugin. The task also exits non-zero on `INTERNAL_API_USAGES`, which this codebase has had for
   years — read the per-IDE `verification-verdict.txt` under `build/reports/pluginVerifier/` rather
-  than trusting the exit code.
+  than trusting the exit code. The `261.*` wildcard that `pluginUntilBuild` carries into that list
+  **does** match real `261.x` builds; it looks like it should truncate to `261.0.0` and select
+  nothing, but a verifier run reports `PY-261.27258.51`. Check
+  `build/reports/pluginVerifier/` before "fixing" it.
 - **A platform bump moves more than `platformVersion`.** Four baselines can move with it. Three fail
   *before* your source is even considered, with an error that doesn't name the cause:
   the **Kotlin compiler** must be new enough to read the platform's metadata (a compiler reads
