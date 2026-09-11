@@ -3,6 +3,7 @@ package com.jetbrains.snakecharm.lang
 import com.intellij.lang.annotation.AnnotationHolder
 import com.intellij.lang.annotation.Annotator
 import com.intellij.openapi.project.DumbAware
+import com.intellij.openapi.util.Key
 import com.intellij.psi.PsiElement
 import com.jetbrains.python.psi.PyElementVisitor
 import com.jetbrains.python.validation.PyAnnotationHolder
@@ -18,16 +19,28 @@ import com.jetbrains.snakecharm.lang.validation.SmkSyntaxErrorAnnotator
 abstract class SmkAnnotatorManager : Annotator, DumbAware {
     /**
      * Annotators bind their [PyAnnotationHolder] at construction since PyCharm 2026.2 (build 262)
-     * removed `PyAnnotator`, so they are built per annotation pass rather than held as singletons.
+     * removed `PyAnnotator`, so they cannot be singletons the way they used to be.
+     *
+     * They are not per-pass either: [annotate] is called once per PSI *element*, so building them
+     * there allocates the whole set (plus a [PyAnnotationHolder]) for every element of every
+     * Snakefile on every highlighting pass. They are therefore cached on the annotation session,
+     * which is exactly the scope of the holder they capture -- one file, one pass. The visitors keep
+     * no state between elements, so sharing them within a pass is safe.
      */
     abstract fun createAnnotators(holder: PyAnnotationHolder): List<PyElementVisitor>
 
+    private val annotatorsKey = Key.create<List<PyElementVisitor>>(javaClass.name + ".annotators")
+
     override fun annotate(element: PsiElement, holder: AnnotationHolder) {
-        val file = element.containingFile
-        if (file is SmkFile) {
-            val pyHolder = PyAnnotationHolder(holder)
-            createAnnotators(pyHolder).forEach { element.accept(it) }
+        if (element.containingFile !is SmkFile) {
+            return
         }
+
+        val session = holder.currentAnnotationSession
+        val annotators = session.getUserData(annotatorsKey)
+            ?: createAnnotators(PyAnnotationHolder(holder)).also { session.putUserData(annotatorsKey, it) }
+
+        annotators.forEach { element.accept(it) }
     }
 }
 
