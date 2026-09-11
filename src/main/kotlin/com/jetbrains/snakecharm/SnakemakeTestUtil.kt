@@ -1,9 +1,10 @@
 package com.jetbrains.snakecharm
 
 import com.intellij.openapi.application.PathManager
-import java.io.File
-import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.Path
+import kotlin.io.path.isDirectory
+import kotlin.io.path.isRegularFile
 
 /**
  * @author Roman.Chernyatchik
@@ -21,13 +22,20 @@ object SnakemakeTestUtil {
      */
     private const val PROJECT_HOME_MARKER = "snakemake_api.yaml"
 
-    fun getTestDataPath(): Path {
+    /**
+     * Resolved once: the project home cannot move while the test JVM runs, and this is called several
+     * times per scenario (~10k times over the suite), each call otherwise costing a resource-root
+     * lookup plus two stat() per ancestor level.
+     */
+    private val projectTestDataPath: Path by lazy {
         val homePath = projectHomePath(SnakemakeTestUtil::class.java)
         checkNotNull(homePath) {
             "Could not locate the project home (a directory containing both '$TEST_DATA_DIR' and '$PROJECT_HOME_MARKER')."
         }
-        return homePath.resolve(TEST_DATA_DIR)
+        homePath.resolve(TEST_DATA_DIR)
     }
+
+    fun getTestDataPath(): Path = projectTestDataPath
 
     private fun projectHomePath(aClass: Class<*>): Path? {
         val rootPath = PathManager.getResourceRoot(
@@ -41,13 +49,9 @@ object SnakemakeTestUtil {
         // platform / IntelliJ Platform Gradle Plugin versions (2026.1 added an extra <projectName> level),
         // so instead of counting a fixed number of parents we walk up to the nearest ancestor that
         // looks like the project home.
-        var dir: Path? = File(rootPath).toPath().parent
-        while (dir != null && !isProjectHome(dir)) {
-            dir = dir.parent
-        }
-        return dir
+        return generateSequence(Path(rootPath).parent) { it.parent }.firstOrNull(::isProjectHome)
     }
 
     private fun isProjectHome(dir: Path) =
-            Files.isDirectory(dir.resolve(TEST_DATA_DIR)) && Files.isRegularFile(dir.resolve(PROJECT_HOME_MARKER))
+            dir.resolve(TEST_DATA_DIR).isDirectory() && dir.resolve(PROJECT_HOME_MARKER).isRegularFile()
 }

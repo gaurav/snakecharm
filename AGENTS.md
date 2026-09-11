@@ -48,6 +48,17 @@ TeamCity it comes from the wrappers VCS root — see issue #571). The test-only 
 (`:buildTestWrappersBundle`, what `test` actually consumes) defaults to `testData/wrappers_storage`
 and needs no property.
 
+`prepareSandbox` reaches that bundle through `from(named("buildWrappersBundle"))`, which works only
+because the task declares the file as `outputs.file(...)` — `from(<file provider>)` carries no task
+dependency, and dropping the dependency produces a wrapper-less plugin *silently*, which has
+happened twice (#588, #591). Two things not to "tidy up" there, both of which have been tried and
+reverted: the `from(...)` must stay **unconditional**, or `buildWrappersBundle` leaves the task graph
+when `snakemakeWrappersRepoPath` is unset and its `onlyIf` — the only place the "no wrappers bundled"
+warning is logged — never runs; and `outputs.upToDateWhen { false }` must stay, because declaring
+the wrappers checkout as an input is what lets Gradle skip the crawler and ship a stale bundle. The
+`onlyIf` deletes any bundle an earlier run left behind; that is what keeps a stale one out, not a
+gate around the copy.
+
 **CLI build memory:** if `:compileKotlin` dies with `OutOfMemoryError: GC overhead limit exceeded`,
 give the Kotlin daemon more heap — append `-Pkotlin.daemon.jvmargs=-Xmx4g` (transforming some large
 generated methods can exhaust the default heap).
@@ -95,9 +106,9 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   `find .sandbox_pycharm -maxdepth 3 -name system-test -exec rm -rf {} +` (its depth varies with
   how the tests were launched, so a fixed glob can silently match nothing). If you see a wall of
   `snakemake`-resolution failures on a fresh checkout, suspect this fixture, **not** your change.
-  (Full write-up: PR #574.) Clearing it is **not free** — the next run re-indexes from scratch, and a
-  full `cleanTest test` straight afterwards took **1h24m** on 2026.1. Clear it when the fixture
-  actually changed, not as a routine "start clean".
+  (Full write-up: PR #574.) Clearing it makes the next run re-index from scratch, so clear it when
+  the fixture actually changed rather than as a routine "start clean" — though the timing table
+  below shows the cost is smaller than that warning once implied.
 - **A "missing" highlight may only be *demoted*.** `When I check highlighting <level>s` calls
   `CodeInsightTestFixture.checkHighlighting`, which reports only the requested severity (plus
   errors) and *silently discards the rest* — so a highlight whose severity dropped from `WARNING`
@@ -112,6 +123,23 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   at WARNING level, and in a scenario without `ignoring extra highlighting` that assertion was the
   guard against stray warnings. Use `I check highlighting warnings and weak warnings`, which asks
   for both.
+- **How long a full run takes.** Every figure below is a single measurement of all 3419 tests on
+  2026.1, so read the band, not the ordering — these differ by machine and load as much as by what
+  they are nominally measuring:
+
+  | run | time |
+  |---|---|
+  | warm Gradle daemon | ~25 min |
+  | cold daemon, sandbox VFS intact | 1h48m; ~95 min extrapolated from an earlier partial run |
+  | cold daemon, straight after clearing the sandbox VFS | 1h24m |
+  | memory-constrained machine, swapping | 3h52m |
+
+  So a cold full run is **1.5–2 hours**, and clearing the VFS has never actually been measured
+  costing more than not clearing — don't clear it routinely (see above), but don't expect the
+  timing to tell you whether you did. The one genuinely different regime is swapping: that 3h52m
+  was a 16 GB laptop with several GB of swap in use, GC healthy throughout, nothing failing, just
+  slow. Check `sysctl vm.swapusage` before concluding anything from a long run. Prefer the
+  single-feature `@here` recipe while iterating either way.
 - **A platform bump can move a check between inspections, and the scenario then passes vacuously.**
   `Given <X> inspection is enabled` fails loudly on an inspection that was *renamed*
   (`fail("Unknown inspection:…")`), but says nothing when the inspection still exists and merely
@@ -126,10 +154,7 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   owner outright. A scenario asserting "no warning" is worth re-checking after any bump for exactly
   this reason.
 - **Analyzing results:** the suite is large — ~3250 Cucumber scenarios plus ~170 plain JUnit tests.
-  Budget around 25 minutes for a warm full `test` run — but that figure assumes a **warm Gradle
-  daemon**: a `cleanTest test` started against a cold one measured ~2200 of 3419 tests at 59 minutes
-  on 2026.1, i.e. ~95 minutes total, with the sandbox VFS untouched. Longer again if that VFS was
-  cleared (see above: 1h24m measured). Either way, prefer the single-feature `@here` recipe while iterating. Gradle prints each failing scenario and a `N tests completed, M failed` summary, so tee
+  Gradle prints each failing scenario and a `N tests completed, M failed` summary, so tee
   the log and reduce it rather than parsing anything: `sed -n '/ > /s/ FAILED$//p' log | sort -u`
   gives a sorted list you can `diff` between two runs (the `/ > /` address skips Gradle's own
   `> Task :test FAILED`). Check the line count against `M failed`. See
@@ -142,9 +167,13 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   matching no scenario exits 0 just as loudly as a full green suite. Read the count out of the XML
   (`<testsuite tests="…">`) before believing a green run; a full suite is 3419. The live signals are the test JVM's accumulating CPU time (`ps -o time=`) and the
   mtime of `build/test-results/test/binary/in-progress-results-generic.bin`; `jstat -gc` tells you
-  whether a quiet stretch is a slow scenario or a GC death spiral. Budget generously on a
-  memory-constrained machine: one all-green run measured **3h52m** on a swapping 16 GB laptop,
-  against the ~95 minutes above.
+  whether a quiet stretch is a slow scenario or a GC death spiral.
+
+  The same "no summary line" quirk means **a truncated run looks identical to a good one**: an
+  all-green `BUILD SUCCESSFUL` says nothing about how many tests ran, so confirm the count from the
+  XML (`tests=` summed over `build/test-results/test/*.xml`; it should be 3419) before reporting a
+  run as green. A stray `@here` tag or a leftover `tags = "not @ignore and @here"` in
+  `AllCucumberFeaturesTest` is the usual cause.
 
 ## Architecture
 
@@ -213,7 +242,10 @@ the entry class for any feature is to grep that file.
   don't re-hardcode a range there or the task starts failing against IDEs that can no longer install
   the plugin. The task also exits non-zero on `INTERNAL_API_USAGES`, which this codebase has had for
   years — read the per-IDE `verification-verdict.txt` under `build/reports/pluginVerifier/` rather
-  than trusting the exit code.
+  than trusting the exit code. The `261.*` wildcard that `pluginUntilBuild` carries into that list
+  **does** match real `261.x` builds; it looks like it should truncate to `261.0.0` and select
+  nothing, but a verifier run reports `PY-261.27258.51`. Check
+  `build/reports/pluginVerifier/` before "fixing" it.
 - **A platform bump moves more than `platformVersion`.** Four baselines can move with it. Three fail
   *before* your source is even considered, with an error that doesn't name the cause:
   the **Kotlin compiler** must be new enough to read the platform's metadata (a compiler reads
