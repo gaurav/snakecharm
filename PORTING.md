@@ -9,6 +9,34 @@ responses to platform changes rather than churn.
 | [2026.1 (build 261)](#20261--unified-pycharm-build-261) | `update-for-intellij-2026.1` | [#570](https://github.com/JetBrains-Research/snakecharm/pull/570) |
 | [2026.2 (build 262)](#20262--build-262) | `update-for-intellij-2026.2` | [#577](https://github.com/JetBrains-Research/snakecharm/pull/577) |
 
+## Keeping the branches in sync
+
+Each port branch is stacked on the previous one, and stays current by merging **forward only**:
+2026.1 → 2026.2, never the other way. The older branch keeps being reviewed and fixed while the
+newer one is being built, so this merge happens repeatedly.
+
+**The trap is a conflict where the newer branch has independently grown a *superset* of what the
+older one is refactoring.** Taking either side whole then silently drops half the behaviour, and the
+loss does not show up as a conflict marker or a compile error — only as a suite that fails
+somewhere unrelated. The worked example: the Python helpers-locator workaround. 2026.2 had extended
+it to handle *two* platform shapes (prune the crashing Pro locator where the EP exists, register the
+EP outright where it does not, which is the 2026.2 case) while 2026.1 had moved the 2026.1-only half
+out of the vendored `PythonMockSdk` into `SmkTestPythonHelpersLocatorFix`. Neither side was
+"correct": the answer was the newer branch's *behaviour* inside the older branch's *structure*.
+
+So the resolution rule is **newer branch's values, older branch's structure** — versions, platform
+constants and platform-specific behaviour come from the branch being merged *into*; refactorings,
+extractions and comments come from the branch being merged *from*. Check every conflict against it
+explicitly rather than reaching for `--ours`/`--theirs`.
+
+`git rerere` (a per-user git setting, not repo config — `git config --global rerere.enabled true`)
+replays a conflict resolution you have already made, which is worth enabling before the first of
+these merges. It is a reason to get the resolution right once, not a reason to skip reading it.
+
+After merging, at minimum: compile, then run the JUnit tests plus a feature that builds the mock SDK
+(`implicit_py_symbols_resolve` is a good choice — every scenario exercises the merged test
+scaffolding). A full run is still owed before the PR merges.
+
 ## 2026.1 — unified PyCharm (build 261)
 
 Branch `update-for-intellij-2026.1`, PR #570.
