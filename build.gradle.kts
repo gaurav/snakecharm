@@ -460,7 +460,10 @@ tasks {
         // `cucumber.filter.tags` *replaces* @CucumberOptions(tags = "not @ignore") rather than
         // intersecting with it, so re-apply that filter here -- otherwise CUCUMBER_TAGS='@here' also
         // runs the @ignore'd scenarios that happen to carry @here.
-        System.getenv("CUCUMBER_TAGS")?.let {
+        // `?.takeIf { ... }`: an exported-but-empty CUCUMBER_TAGS would otherwise build the tag
+        // expression "not @ignore and ()", which cucumber rejects with a parse error instead of
+        // running the whole suite.
+        System.getenv("CUCUMBER_TAGS")?.takeIf { it.isNotBlank() }?.let {
             systemProperty("cucumber.filter.tags", "not @ignore and ($it)")
         }
 
