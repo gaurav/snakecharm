@@ -35,7 +35,9 @@ object SmkTestPythonHelpersLocatorFix {
      * directly under `lib/`. That is purely a gradle-test-sandbox artifact (the flattened test classpath
      * means the plugin classes aren't under a `PluginAwareClassLoader`, so the safe branch of
      * `getPluginDistDirByClass` isn't taken; upstream
-     * https://github.com/JetBrains/intellij-platform-gradle-plugin/issues/2070, unfixed). Unlike the
+     * https://github.com/JetBrains/intellij-platform-gradle-plugin/issues/2183, open -- the issue this
+     * used to cite, #2070, was closed on 2026-09-11 as a *duplicate* of it and not as fixed, so don't
+     * read that closure as a reason to drop this). Unlike the
      * community locator it reads no `idea.python.helpers.path` property, so it can't be pointed at a
      * valid root. Removing just this one dynamic EP leaves the community locator (fed by the
      * `-Didea.python.helpers.path` jvmArg) and the rest of the Pro Python plugin intact, so Python
