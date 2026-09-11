@@ -165,13 +165,13 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   hung one** — and so does one that ran nothing. `BUILD SUCCESSFUL` says only that no test failed,
   never how many ran, and `CUCUMBER_TAGS` makes an empty run easy to reach: a tag expression
   matching no scenario exits 0 just as loudly as a full green suite. Read the count out of the XML
-  (`<testsuite tests="…">`) before believing a green run; a full suite is 3419. The live signals are the test JVM's accumulating CPU time (`ps -o time=`) and the
+  (`<testsuite tests="…">`) before believing a green run; a full suite is **3420** across 125 suites (measured on `23097522`, the 2026.2 branch; it was 3419 until the #570 merge added a scenario, so older notes say that). The live signals are the test JVM's accumulating CPU time (`ps -o time=`) and the
   mtime of `build/test-results/test/binary/in-progress-results-generic.bin`; `jstat -gc` tells you
   whether a quiet stretch is a slow scenario or a GC death spiral.
 
   The same "no summary line" quirk means **a truncated run looks identical to a good one**: an
   all-green `BUILD SUCCESSFUL` says nothing about how many tests ran, so confirm the count from the
-  XML (`tests=` summed over `build/test-results/test/*.xml`; it should be 3419) before reporting a
+  XML (`tests=` summed over `build/test-results/test/*.xml`; it should be 3420) before reporting a
   run as green. A stray `@here` tag or a leftover `tags = "not @ignore and @here"` in
   `AllCucumberFeaturesTest` is the usual cause.
 
