@@ -15,17 +15,17 @@ than defining a language from scratch.
 
 ## Build & test
 
-The Gradle build uses the JDK toolchain `javaVersion` names in `gradle.properties` — **25 on this
-branch**, and `.java-version` in the repo root carries the same number — plus the Gradle version
-pinned there (`gradleVersion`). **Launch Gradle itself on that JDK**, not merely as an available
-toolchain, because the window is bounded at both ends: too new and the pinned Gradle crashes with a
-cryptic error (Gradle 8.x on JDK 24 fails with `Type T not present`), too old and `instrumentCode`
-dies loading platform classes (2026.2 emits Java 25, so a JDK 21 daemon gets
-`UnsupportedClassVersionError: … class file version 69.0`). Set `JAVA_HOME` before building from the
-CLI and **verify it** with `"$JAVA_HOME/bin/java" -version`: on macOS `/usr/libexec/java_home -v 25`
-treats 25 as a *minimum*, so it can hand back something newer, exit 0, and leave you with one of
-those two errors and no hint why. Use a jenv/asdf/SDKMAN path (`jenv prefix 25`) or an explicit
-install path.
+The Gradle build uses the JDK toolchain `javaVersion` names in `gradle.properties`, and
+`.java-version` in the repo root carries the same number — read it there rather than trusting any
+number written in prose, because it moves with the platform and differs per branch. **Launch Gradle
+itself on that JDK**, not merely as an available toolchain, because the window is bounded at both
+ends: too new and the pinned Gradle crashes with a cryptic error (Gradle 8.x on JDK 24 fails with
+`Type T not present`), too old and `instrumentCode` dies loading platform classes (2026.2 emits Java
+25, so a JDK 21 daemon gets `UnsupportedClassVersionError: … class file version 69.0`). Set
+`JAVA_HOME` before building from the CLI and **verify it** with `"$JAVA_HOME/bin/java" -version`: on
+macOS `/usr/libexec/java_home -v <n>` treats `<n>` as a *minimum*, so it can hand back something
+newer, exit 0, and leave you with one of those two errors and no hint why. Use a jenv/asdf/SDKMAN
+path (`jenv prefix "$(cat .java-version)"`) or an explicit install path.
 
 ```shell
 ./gradlew buildPlugin      # -> build/distributions/snakecharm-*.zip
