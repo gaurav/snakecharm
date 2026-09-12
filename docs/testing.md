@@ -1,8 +1,8 @@
 # Testing
 
-How the SnakeCharm test suite is laid out, how to run one feature instead of all 3420, and the
-traps that make a correct change look broken. Split out of `AGENTS.md`, which links here; see also
-`DEVELOPER.md` → Configure Tests for the one-time setup this assumes (run configuration, the
+How the SnakeCharm test suite is laid out, how to run one feature instead of the whole suite, and
+the traps that make a correct change look broken. Split out of `AGENTS.md`, which links here; see
+also `DEVELOPER.md` → Configure Tests for the one-time setup this assumes (run configuration, the
 gitignored snakemake fixture), and `PORTING.md` for what each platform bump did to the suite.
 
 ## Running tests
