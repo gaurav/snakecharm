@@ -1,6 +1,6 @@
 # Testing
 
-How the SnakeCharm test suite is laid out, how to run one feature instead of all 3419, and the
+How the SnakeCharm test suite is laid out, how to run one feature instead of all 3420, and the
 traps that make a correct change look broken. Split out of `AGENTS.md`, which links here; see also
 `DEVELOPER.md` for the setup steps (Configure Tests, Reading test results) and `PORTING.md` for
 what each platform bump did to the suite.
@@ -48,9 +48,9 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   `find .sandbox_pycharm -maxdepth 3 -name system-test -exec rm -rf {} +` (its depth varies with
   how the tests were launched, so a fixed glob can silently match nothing). If you see a wall of
   `snakemake`-resolution failures on a fresh checkout, suspect this fixture, **not** your change.
-  (Full write-up: PR #574.) Clearing it is **not free** — the next run re-indexes from scratch, and a
-  full `cleanTest test` straight afterwards took **1h24m** on 2026.1. Clear it when the fixture
-  actually changed, not as a routine "start clean".
+  (Full write-up: PR #574.) Clearing it makes the next run re-index from scratch, so clear it when
+  the fixture actually changed rather than as a routine "start clean" — though the timing table
+  below shows the cost is smaller than that warning once implied.
 - **A "missing" highlight may only be *demoted*.** `When I check highlighting <level>s` calls
   `CodeInsightTestFixture.checkHighlighting`, which reports only the requested severity (plus
   errors) and *silently discards the rest* — so a highlight whose severity dropped from `WARNING`
@@ -65,6 +65,23 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   at WARNING level, and in a scenario without `ignoring extra highlighting` that assertion was the
   guard against stray warnings. Use `I check highlighting warnings and weak warnings`, which asks
   for both.
+- **How long a full run takes.** Every figure below is a single measurement of all 3419 tests on
+  2026.1, so read the band, not the ordering — these differ by machine and load as much as by what
+  they are nominally measuring:
+
+  | run | time |
+  |---|---|
+  | warm Gradle daemon | ~25 min |
+  | cold daemon, sandbox VFS intact | 1h48m; ~95 min extrapolated from an earlier partial run |
+  | cold daemon, straight after clearing the sandbox VFS | 1h24m |
+  | memory-constrained machine, swapping | 3h52m |
+
+  So a cold full run is **1.5–2 hours**, and clearing the VFS has never actually been measured
+  costing more than not clearing — don't clear it routinely (see above), but don't expect the
+  timing to tell you whether you did. The one genuinely different regime is swapping: that 3h52m
+  was a 16 GB laptop with several GB of swap in use, GC healthy throughout, nothing failing, just
+  slow. Check `sysctl vm.swapusage` before concluding anything from a long run. Prefer the
+  single-feature `@here` recipe while iterating either way.
 - **A platform bump can move a check between inspections, and the scenario then passes vacuously.**
   `Given <X> inspection is enabled` fails loudly on an inspection that was *renamed*
   (`fail("Unknown inspection:…")`), but says nothing when the inspection still exists and merely
@@ -79,11 +96,7 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   owner outright. A scenario asserting "no warning" is worth re-checking after any bump for exactly
   this reason.
 - **Analyzing results:** the suite is large — ~3250 Cucumber scenarios plus ~170 plain JUnit tests.
-  Budget around 25 minutes for a warm full `test` run — but that figure assumes a **warm Gradle
-  daemon**: a `cleanTest test` started against a cold one measured ~2200 of 3419 tests at 59 minutes
-  on 2026.1, i.e. ~95 minutes total, with the sandbox VFS untouched. Longer again if that VFS was
-  cleared (see above: 1h24m measured). Either way, prefer the single-feature `@here` recipe while
-  iterating. Gradle prints each failing scenario and a `N tests completed, M failed` summary, so tee
+  Gradle prints each failing scenario and a `N tests completed, M failed` summary, so tee
   the log and reduce it rather than parsing anything: `sed -n '/ > /s/ FAILED$//p' log | sort -u`
   gives a sorted list you can `diff` between two runs (the `/ > /` address skips Gradle's own
   `> Task :test FAILED`). Check the line count against `M failed`. See
@@ -94,9 +107,14 @@ through a single JUnit runner, `AllCucumberFeaturesTest` (glue/step definitions 
   hung one** — and so does one that ran nothing. `BUILD SUCCESSFUL` says only that no test failed,
   never how many ran, and `CUCUMBER_TAGS` makes an empty run easy to reach: a tag expression
   matching no scenario exits 0 just as loudly as a full green suite. Read the count out of the XML
-  (`<testsuite tests="…">`) before believing a green run; a full suite is 3419.
-  The live signals are the test JVM's accumulating CPU time (`ps -o time=`) and the
-  mtime of `build/test-results/test/binary/in-progress-results-generic.bin`; `jstat -gc` tells you
-  whether a quiet stretch is a slow scenario or a GC death spiral. Budget generously on a
-  memory-constrained machine: one all-green run measured **3h52m** on a swapping 16 GB laptop,
-  against the ~95 minutes above.
+  (`<testsuite tests="…">`) before believing a green run; a full suite is **3420** across 125 suites
+  (measured on `23097522`, the 2026.2 branch; it was 3419 until the #570 merge added a scenario, so
+  older notes say that). The live signals are the test JVM's accumulating CPU time (`ps -o time=`)
+  and the mtime of `build/test-results/test/binary/in-progress-results-generic.bin`; `jstat -gc`
+  tells you whether a quiet stretch is a slow scenario or a GC death spiral.
+
+  The same "no summary line" quirk means **a truncated run looks identical to a good one**: an
+  all-green `BUILD SUCCESSFUL` says nothing about how many tests ran, so confirm the count from the
+  XML (`tests=` summed over `build/test-results/test/*.xml`; it should be 3420) before reporting a
+  run as green. A stray `@here` tag or a leftover `tags = "not @ignore and @here"` in
+  `AllCucumberFeaturesTest` is the usual cause.

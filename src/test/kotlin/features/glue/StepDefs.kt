@@ -82,7 +82,15 @@ class StepDefs {
         // project it was attached to, so the next scenario to reuse the instance dies with
         // "AlreadyDisposedException: Requesting a package manager for an already disposed SDK"
         // (measured: 14 failures across the resolve/implicit-symbol features, 0 without).
-        // myPythonOnlySdk below is cached only because nothing ever attaches it to a project.
+        // myPythonOnlySdk below is cached under a weaker guarantee, so treat it with the same
+        // suspicion: `set project sdk as python only interpreter` (see setProjectSdk) DOES attach it
+        // to the shared project, which puts it in that project's workspace model and therefore in
+        // the blast radius of the project's disposal. Exactly one scenario does that today
+        // (resolve/implicit_py_symbols_resolve.feature), and it is the last step of that scenario,
+        // so nothing has yet come back to a cached SDK that a descriptor change disposed underneath
+        // it. That is a property of the feature files, not of this cache -- if AlreadyDisposedException
+        // ever shows up here, key it by the project instance (or build the SDK where it is attached)
+        // rather than by level + testDataRoot.
         val descriptorKey = listOf(level.toString(), testDataRoot) + additionalRoots.map { it.toString() }
         val projectDescriptor = projectDescriptors.getOrPut(descriptorKey) {
             PyLightProjectDescriptor(level, testDataRoot, *additionalRoots)

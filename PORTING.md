@@ -9,6 +9,34 @@ responses to platform changes rather than churn.
 | [2026.1 (build 261)](#20261--unified-pycharm-build-261) | `update-for-intellij-2026.1` | [#570](https://github.com/JetBrains-Research/snakecharm/pull/570) |
 | [2026.2 (build 262)](#20262--build-262) | `update-for-intellij-2026.2` | [#577](https://github.com/JetBrains-Research/snakecharm/pull/577) |
 
+## Keeping the branches in sync
+
+Each port branch is stacked on the previous one, and stays current by merging **forward only**:
+2026.1 → 2026.2, never the other way. The older branch keeps being reviewed and fixed while the
+newer one is being built, so this merge happens repeatedly.
+
+**The trap is a conflict where the newer branch has independently grown a *superset* of what the
+older one is refactoring.** Taking either side whole then silently drops half the behaviour, and the
+loss does not show up as a conflict marker or a compile error — only as a suite that fails
+somewhere unrelated. The worked example: the Python helpers-locator workaround. 2026.2 had extended
+it to handle *two* platform shapes (prune the crashing Pro locator where the EP exists, register the
+EP outright where it does not, which is the 2026.2 case) while 2026.1 had moved the 2026.1-only half
+out of the vendored `PythonMockSdk` into `SmkTestPythonHelpersLocatorFix`. Neither side was
+"correct": the answer was the newer branch's *behaviour* inside the older branch's *structure*.
+
+So the resolution rule is **newer branch's values, older branch's structure** — versions, platform
+constants and platform-specific behaviour come from the branch being merged *into*; refactorings,
+extractions and comments come from the branch being merged *from*. Check every conflict against it
+explicitly rather than reaching for `--ours`/`--theirs`.
+
+`git rerere` (a per-user git setting, not repo config — `git config --global rerere.enabled true`)
+replays a conflict resolution you have already made, which is worth enabling before the first of
+these merges. It is a reason to get the resolution right once, not a reason to skip reading it.
+
+After merging, at minimum: compile, then run the JUnit tests plus a feature that builds the mock SDK
+(`implicit_py_symbols_resolve` is a good choice — every scenario exercises the merged test
+scaffolding). A full run is still owed before the PR merges.
+
 ## 2026.1 — unified PyCharm (build 261)
 
 Branch `update-for-intellij-2026.1`, PR #570.
@@ -70,7 +98,7 @@ structural moves:
 2. **The Python plugin was repackaged as v2 content modules** — its code now lives in
    `.../python-ce/lib/modules/*.jar` and `.../python/lib/modules/*.jar` rather than directly under
    `lib/`. → **the `PlatformLiteFixture` removal, the test-data-path extra directory level, and
-   both `PyTypeShed` helpers-locator crashes** (upstream gradle-plugin #2070).
+   both `PyTypeShed` helpers-locator crashes** (upstream gradle-plugin #2183).
 3. **The bundled toolchain was upgraded**: Kotlin `2.3.20` (coroutine `@DebugMetadata` v2) and a
    newer bundled typeshed (single-file stubs became *package* stubs).
 
@@ -84,6 +112,13 @@ structural moves:
   every bump, or those users silently keep building on the old JDK.
 - `gradle.properties`: `platformType = PY`, `platformVersion = 2026.1.3`, `pluginSinceBuild = 261`,
   `pluginUntilBuild = 261.*`, `pluginVersion = 2026.1.0`.
+  - **`PC → PY` costs a compile-time guardrail.** With `PC` the compile classpath was
+    `bundledPlugin("PythonCore")`, so a Professional-only Python API used from `src/main` failed the
+    build. On `PY` it is `Pythonid`, while `plugin.xml` still declares only
+    `<depends>PythonCore</depends>` and we still support IDEA + the community Python plugin. Such a
+    call now compiles *and* passes the suite (the Gradle test classpath is flat) and fails only at
+    runtime, for those users, with `NoClassDefFoundError`. There is no community 2026.1 artifact to
+    build against, so this has to be watched by hand in review.
 - `build.gradle.kts`: adapted to plugin-2.16.0 / Gradle-9.6 API changes, plus a runtime-only
   `resolutionStrategy` forcing kotlin-stdlib and kotlinx-serialization to the platform's versions
   (see test break 6, and #587 for the serialization half); also
@@ -182,10 +217,13 @@ structural moves:
 
 ### Related work & open items
 
-- **Upstream gradle-plugin [#2070](https://github.com/JetBrains/intellij-platform-gradle-plugin/issues/2070)** —
+- **Upstream gradle-plugin [#2183](https://github.com/JetBrains/intellij-platform-gradle-plugin/issues/2183)** —
   the root cause of the helpers-locator crashes (v2 content-module jars on a flat test classpath).
-  If fixed upstream, the EP-unregister workaround (break 8) could be dropped. Worth retrying with a
-  newer IntelliJ Platform Gradle Plugin (`2.16 → 2.17`, the build nags) and/or a newer `2026.1.x`.
+  Still open. The issue we originally tracked, [#2070](https://github.com/JetBrains/intellij-platform-gradle-plugin/issues/2070),
+  was closed on 2026-09-11 **as a duplicate of #2183, not as fixed** — a closed upstream link is not
+  evidence the workaround can go. If #2183 is fixed, the EP-unregister workaround (break 8) and the
+  EP-registration half on 2026.2 could both be dropped; re-check on each IntelliJ Platform Gradle
+  Plugin bump.
 - **The pre-existing bare-`snakemake`/`MockPackages3` fixture gap** — a missing test fixture rather
   than a port defect, filed as [#575](https://github.com/JetBrains-Research/snakecharm/issues/575)
   with the setup fix in [#574](https://github.com/JetBrains-Research/snakecharm/pull/574) and the
@@ -362,6 +400,40 @@ pushes a default (disabled) state explicitly.
 
 Worth remembering when the next test starts failing "because of" a fix: a shared-project test suite
 can hold assertions that only hold while something else is broken.
+
+### 14. `PyAnnotator` and `ReturnAnnotator` were removed — FIXED
+
+`com.jetbrains.python.validation.PyAnnotator` exists in 2026.1.3 and is gone in 2026.2. It was the
+base class every SnakeCharm annotator extended, supplying `annotateElement()`,
+`addHighlightingAnnotation()` and the `holder` field — 22 of the 25 compile errors on the first
+build. The platform moved its own annotators to a plain `PyElementVisitor` that takes a
+`PyAnnotationHolder` at construction (e.g. `PyReturnYieldAnnotatorVisitor`), which is the shape
+adopted here: `SmkAnnotatorBase` holds the holder and re-exposes the `addHighlightingAnnotation`
+overloads, so the annotator bodies did not change. The remaining 3 errors were
+`SmkSLSubscriptionExpression.acceptPyVisitor` taking a non-null `PyAstElementVisitor`.
+
+The `ReturnAnnotator` extension point went with it; its "'return' outside of function" check moved
+into the final `PySyntaxAnnotator`. The false positive for `return` inside snakemake `run:` /
+`onstart` / `onerror` / `onsuccess` is now suppressed by a `daemon.highlightInfoFilter`
+(`SmkReturnHighlightInfoFilter`) rather than by a custom annotator. `return_annotator.feature`
+covers both directions — the suppression, and that a `yield` outside a function is still reported.
+
+**The cost that came with it, and that this port paid twice.** Binding the holder at construction
+means annotators can no longer be singletons, and `Annotator.annotate()` is called once per PSI
+*element*, not once per pass — so the naive port allocates a holder and a visitor set for every
+element of every file it is registered against, on every highlighting pass:
+
+- `SmkSLAnnotatingVisitor` is registered against `language="Python"` with no file guard, so it did
+  that for every `.py` file in the project, for users who never open a Snakefile. It now checks the
+  containing file first (safe: `SmkSLInjector.isValidForInjection` gates injection on
+  `isInsideSmkFile`, so SmkSL never appears outside a Snakemake file).
+- `SmkAnnotatorManager` had the `file is SmkFile` guard from the start, which bounds the waste to
+  Snakefiles but does not remove it. It now caches the visitors on `AnnotationHolder`'s
+  `currentAnnotationSession` — the same scope as the holder they capture, one file and one pass.
+  The visitors keep no state between elements, so sharing them within a pass is safe.
+
+Rule for anything registered as an `Annotator`: **`annotate()` is a per-element callback.** Whatever
+it builds, it builds hundreds of thousands of times. Guard on the file first, then cache per session.
 
 ### Method note: cluster failure *messages*, not test names
 

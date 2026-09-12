@@ -96,8 +96,9 @@ configurations.matching { it.name.endsWith("RuntimeClasspath", ignoreCase = true
         // cbor, so the pair stays consistent) to the platform's version fixes the direction of the
         // skew: a newer core runs older generated code fine.
         //
-        // `cbor` in the version catalog is already 1.9.0, so today these forces are a no-op; they are
-        // what keeps a future catalog bump, or a transitive downgrade, from reintroducing the skew.
+        // Our own `kotlinxCbor` already resolves to this version (the catalog points it at the same
+        // key), so today these forces are a no-op; they are what keeps a transitive dependency from
+        // dragging a different serialization version in and reintroducing the skew.
         // Measured on #577 (2026.2), where the same skew was live: forcing this removed 101 failures.
         // See #587.
         force("org.jetbrains.kotlinx:kotlinx-serialization-core:$kotlinxSerializationPlatformVersion")
@@ -107,10 +108,15 @@ configurations.matching { it.name.endsWith("RuntimeClasspath", ignoreCase = true
 
 
 // The platform types whose IDE *is* a Python IDE, i.e. the ones that bundle the Python plugin (and
-// therefore its `helpers` directory) as part of the distribution: PyCharm Community, PyCharm
-// Professional and DataSpell. Anything else (IDEA + the external Python plugin) is laid out
-// differently. Keep this in sync with the `when (platformType)` below.
-val isPyCharmPlatform = gradlePropertyWithPriorityToSystemProperty("platformType") in setOf("PC", "PY", "PD")
+// therefore its `helpers` directory) as part of the distribution. Anything else (IDEA + the external
+// Python plugin) is laid out differently. Goes through the plugin's own enum rather than re-listing
+// the codes, so a typo in `platformType` fails loudly here instead of silently picking "not PyCharm".
+val isPyCharmPlatform = IntelliJPlatformType.fromCode(gradlePropertyWithPriorityToSystemProperty("platformType")) in
+        setOf(
+            IntelliJPlatformType.PyCharmCommunity,
+            IntelliJPlatformType.PyCharmProfessional,
+            IntelliJPlatformType.DataSpell,
+        )
 
 dependencies {
     implementation(libs.kotlinStdlibJdk8)
@@ -146,9 +152,23 @@ dependencies {
         }
 
         // Plugin Dependencies. Uses `platformPlugins` property from the gradle.properties file.
+        //
+        // NB: on "PY"/"DS" the compile classpath is `Pythonid` (Python Professional), while
+        // plugin.xml declares only `<depends>PythonCore</depends>` and the `else ->` branch still
+        // targets IDEA + the community Python plugin. So the compiler no longer rejects a
+        // Professional-only Python API used from `src/main`: it compiles, and the tests pass (their
+        // classpath is flat), but it would throw NoClassDefFoundError for users on IDEA + PythonCore.
+        // Since 2026.1 there is no community PyCharm artifact to build against, so keep that
+        // restriction in mind by hand -- everything in `src/main` must stay within PythonCore's API.
         when (platformType) {
             "PC" -> bundledPlugin("PythonCore")
-            "PY", "PD" -> {
+            // NB: keep these codes in sync with `isPyCharmPlatform` above -- they are the same
+            // question asked twice. "DS" (DataSpell) is a Python IDE built on Professional, so it
+            // bundles `Pythonid` like "PY" does; anything reaching `else` is IDEA + the external
+            // Python plugin. There is no "PD" code (see IntelliJPlatformType), and one used to be
+            // listed here: `fromCode` would have thrown at configuration time long before the
+            // branch could ever be taken.
+            "PY", "DS" -> {
                 bundledPlugin("Pythonid")
 
                 // TODO??? cleanup? check tests runing or not:
@@ -310,8 +330,9 @@ kotlin {
 }
 
 // The production wrappers bundle needs a local snakemake-wrappers checkout (see DEVELOPER.md); CI
-// provides one. Read once here so both `buildWrappersBundle` and `prepareSandbox` gate on it. See #571.
+// provides one. See #571.
 val wrappersRepoPath = gradlePropertyOptional("snakemakeWrappersRepoPath")?.takeIf { it.isNotBlank() }
+val wrappersBundleFile = layout.buildDirectory.file("bundledWrappers/smk-wrapper-storage-bundled.cbor")
 
 tasks {
 
@@ -359,14 +380,24 @@ tasks {
                         "name completion will be unavailable). " +
                         "Pass -PsnakemakeWrappersRepoPath=<snakemake-wrappers checkout> to include them. See #571."
                 )
+                // Drop a bundle left by an earlier run that did have the property, so prepareSandbox
+                // cannot pack a stale one whose embedded repo version disagrees with gradle.properties.
+                wrappersBundleFile.get().asFile.delete()
             }
             wrappersRepoPath != null
         }
 
+        // Declared so `prepareSandbox` can wire itself to this task by its output (which carries the
+        // task dependency) instead of a hand-written `dependsOn` plus a literal path. The crawler
+        // reads a whole external repo, so there is nothing cheap to hash as an input -- never claim
+        // to be up to date rather than risk shipping a silently stale bundle.
+        outputs.file(wrappersBundleFile)
+        outputs.upToDateWhen { false }
+
         args(
             wrappersRepoPath ?: "",
             gradleProperty("snakemakeWrappersRepoVersion").get(),
-            layout.buildDirectory.file("bundledWrappers/smk-wrapper-storage-bundled.cbor").get(),
+            wrappersBundleFile.get(),
             layout.projectDirectory.file("snakemake_api.yaml")
         )
         maxHeapSize = System.getenv("SNAKECHARM_TEST_HEAP") ?: "1024m" // TC agents are small; override locally, e.g. SNAKECHARM_TEST_HEAP=8g
@@ -397,27 +428,12 @@ tasks {
 
 
     prepareSandbox {
-        // Pack wrappers bundle into plugin, but only when this build actually produced one. Gating
-        // here (rather than deleting a stale bundle from buildWrappersBundle's onlyIf) covers the
-        // common case: with `snakemakeWrappersRepoPath` unset, a bundle left by an earlier run that
-        // did have the property is not packed, so the plugin can't ship a wrappers list whose repo
-        // version disagrees with gradle.properties. It does NOT cover an explicit
-        // `-x buildWrappersBundle` *with* the property set — there the `from(...)` is registered and
-        // a stale bundle would still be packed. That excluding is a deliberate act; if you do it,
-        // delete build/bundledWrappers/ first.
-        //
-        // The `dependsOn` is required: `from(<file provider>)` carries no task dependency, and
-        // buildWrappersBundle declares no outputs, so without it the bundle is never built and Copy
-        // silently packs nothing. Verify with `./gradlew -m prepareSandbox -PsnakemakeWrappersRepoPath=...`.
-        // It is unconditional so that with the property unset buildWrappersBundle still enters the
-        // task graph and its `onlyIf` runs -- that block is the only place the "no wrappers bundled"
-        // warning is logged, and gating the dependency on the property would silence it in exactly
-        // the case it exists for.
-        dependsOn("buildWrappersBundle")
-        if (wrappersRepoPath != null) {
-            from(layout.buildDirectory.file("bundledWrappers/smk-wrapper-storage-bundled.cbor")) {
-                into(pluginName.map { "$it/extra" })
-            }
+        // Pack the wrappers bundle into the plugin. Wiring to the *task* rather than to a path carries
+        // the task dependency, keeps buildWrappersBundle in the graph so its `onlyIf` still logs the
+        // "no wrappers bundled" warning, and packs nothing when that `onlyIf` skipped it -- the skip
+        // deletes any bundle an earlier run left behind, so there is no stale file to pick up.
+        from(named("buildWrappersBundle")) {
+            into(pluginName.map { "$it/extra" })
         }
         from(layout.projectDirectory.file("snakemake_api.yaml")) {
             into(pluginName.map { "$it/extra" })
@@ -444,7 +460,10 @@ tasks {
         // `cucumber.filter.tags` *replaces* @CucumberOptions(tags = "not @ignore") rather than
         // intersecting with it, so re-apply that filter here -- otherwise CUCUMBER_TAGS='@here' also
         // runs the @ignore'd scenarios that happen to carry @here.
-        System.getenv("CUCUMBER_TAGS")?.let {
+        // `?.takeIf { ... }`: an exported-but-empty CUCUMBER_TAGS would otherwise build the tag
+        // expression "not @ignore and ()", which cucumber rejects with a parse error instead of
+        // running the whole suite.
+        System.getenv("CUCUMBER_TAGS")?.takeIf { it.isNotBlank() }?.let {
             systemProperty("cucumber.filter.tags", "not @ignore and ($it)")
         }
 
@@ -466,17 +485,16 @@ tasks {
         jvmArgumentProviders += CommandLineArgumentProvider {
             val pythonHelpersPath = intellijPlatform.platformPath.resolve("plugins/python-ce/helpers")
             if (pythonHelpersPath.isDirectory()) {
-                listOf("-Didea.python.helpers.path=$pythonHelpersPath")
-            } else {
-                if (isPyCharmPlatform) {
-                    Logging.getLogger("snakecharm").warn(
-                        "Python helpers not found at $pythonHelpersPath, so -Didea.python.helpers.path is not set. " +
-                                "Tests that infer Python types will fail with " +
-                                "\"IllegalStateException: ... should be lib directory\"."
-                    )
-                }
-                emptyList()
+                return@CommandLineArgumentProvider listOf("-Didea.python.helpers.path=$pythonHelpersPath")
             }
+            if (isPyCharmPlatform) {
+                Logging.getLogger("snakecharm").warn(
+                    "Python helpers not found at $pythonHelpersPath, so -Didea.python.helpers.path is not set. " +
+                            "Tests that infer Python types will fail with " +
+                            "\"IllegalStateException: ... should be lib directory\"."
+                )
+            }
+            emptyList()
         }
 
         reports {
@@ -487,15 +505,15 @@ tasks {
     }
 
     printProductsReleases {
-        channels = listOf(ProductRelease.Channel.EAP)
+        // Both channels: EAP answers "what is coming", RELEASE answers "what is the newest build I
+        // could target right now", and the two have different newest builds. EAP alone is actively
+        // misleading -- with 2026.2.2 (262.10315.174) already out, an EAP-only run reported
+        // 262.8665.97 as the newest 262, i.e. a build *older* than the one being built against.
+        channels = listOf(ProductRelease.Channel.RELEASE, ProductRelease.Channel.EAP)
         // Follow `platformType` rather than hardcoding one: PyCharm Community (`PC`) publishes
         // nothing from 2025.3 on, so a hardcoded `PyCharmCommunity` would report "no newer release"
         // forever instead of listing the platform we actually build against.
         types = listOf(IntelliJPlatformType.fromCode(gradlePropertyWithPriorityToSystemProperty("platformType")))
         untilBuild = provider { null }
-
-        doLast {
-            val latestEap = productsReleases.get().max()
-        }
     }
 }

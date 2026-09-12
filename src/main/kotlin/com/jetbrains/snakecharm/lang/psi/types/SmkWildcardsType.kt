@@ -188,7 +188,7 @@ class SmkWildcardsType(private val ruleOrCheckpoint: SmkRuleOrCheckpoint) : PySt
     override fun getAttributeNames(): Set<String> = wildcards ?: emptySet()
 
     override fun getCompletionVariantsAndPriority(
-        completionPrefix: String?, location: PsiElement, context: ProcessingContext?
+        completionPrefix: String?, location: PsiElement, context: ProcessingContext
     ) = emptyList<LookupElementBuilder>() to 0.0
 
     override val isBuiltin: Boolean get() = false

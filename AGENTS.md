@@ -48,6 +48,17 @@ TeamCity it comes from the wrappers VCS root — see issue #571). The test-only 
 (`:buildTestWrappersBundle`, what `test` actually consumes) defaults to `testData/wrappers_storage`
 and needs no property.
 
+`prepareSandbox` reaches that bundle through `from(named("buildWrappersBundle"))`, which works only
+because the task declares the file as `outputs.file(...)` — `from(<file provider>)` carries no task
+dependency, and dropping the dependency produces a wrapper-less plugin *silently*, which has
+happened twice (#588, #591). Two things not to "tidy up" there, both of which have been tried and
+reverted: the `from(...)` must stay **unconditional**, or `buildWrappersBundle` leaves the task graph
+when `snakemakeWrappersRepoPath` is unset and its `onlyIf` — the only place the "no wrappers bundled"
+warning is logged — never runs; and `outputs.upToDateWhen { false }` must stay, because declaring
+the wrappers checkout as an input is what lets Gradle skip the crawler and ship a stale bundle. The
+`onlyIf` deletes any bundle an earlier run left behind; that is what keeps a stale one out, not a
+gate around the copy.
+
 **CLI build memory:** if `:compileKotlin` dies with `OutOfMemoryError: GC overhead limit exceeded`,
 give the Kotlin daemon more heap — append `-Pkotlin.daemon.jvmargs=-Xmx4g` (transforming some large
 generated methods can exhaust the default heap).
@@ -90,7 +101,12 @@ latest one the plugin officially supports.
 Feature areas (each maps to a source package and a `features/` test dir):
 
 - `lang/highlighter/`, `lang/validation/` — syntax highlighting + annotators (registered against
-  Python; some run through `SmkStandardAnnotatorManager` / `SmkDumbAwareAnnotatorManager`).
+  Python; some run through `SmkStandardAnnotatorManager` / `SmkDumbAwareAnnotatorManager`). Since
+  2026.2 removed `PyAnnotator`, these are `PyElementVisitor`s that take their `PyAnnotationHolder`
+  at construction, so they cannot be singletons — and `Annotator.annotate()` is a **per-element**
+  callback, so anything built inside it is built once per PSI element per highlighting pass. Guard
+  on the containing file first, then cache per `AnnotationHolder.currentAnnotationSession`. Both
+  halves of that have been missed once each (`PORTING.md` → "2026.2", item 14).
 - `codeInsight/` — completion contributors and resolve for Snakemake magic (`config`, `rules`,
   `rules.<name>.<section>`, wildcards, api methods like `expand`/`temp`, wrapper names). The implicit
   "runtime magic" symbols (`expand`, `temp`, `config`, `rules`, …) are built by
@@ -127,7 +143,10 @@ the entry class for any feature is to grep that file.
   don't re-hardcode a range there or the task starts failing against IDEs that can no longer install
   the plugin. The task also exits non-zero on `INTERNAL_API_USAGES`, which this codebase has had for
   years — read the per-IDE `verification-verdict.txt` under `build/reports/pluginVerifier/` rather
-  than trusting the exit code.
+  than trusting the exit code. The `261.*` wildcard that `pluginUntilBuild` carries into that list
+  **does** match real `261.x` builds; it looks like it should truncate to `261.0.0` and select
+  nothing, but a verifier run reports `PY-261.27258.51`. Check
+  `build/reports/pluginVerifier/` before "fixing" it.
 - **A platform bump moves more than `platformVersion`.** Four baselines can move with it. Three fail
   *before* your source is even considered, with an error that doesn't name the cause:
   the **Kotlin compiler** must be new enough to read the platform's metadata (a compiler reads
@@ -158,6 +177,20 @@ the entry class for any feature is to grep that file.
   `PluginGeneratedSerialDescriptor.kt`, which names neither this plugin nor serialization, and (see the
   bullet below) takes hundreds of unrelated scenarios down with it. Issue #587 is the write-up; it cost
   101 failures on the 2026.2 port.
+- **A patch release is worth the same two checks, and they are cheap.** A `2026.2.1` → `2026.2.2`
+  bump moves `platformVersion` only — the build number stays `262.x`, so `pluginSinceBuild` /
+  `pluginUntilBuild` and the manifest do not move — but the bundled libraries above still can.
+  Rather than hunting version strings, diff the jars between the two downloaded distributions
+  (`shasum -a 256 lib/intellij.libraries.kotlinx.serialization.core.jar` in each): byte-identical
+  means nothing moved. That detour is worth taking because `kotlin-stdlib` is not shipped as a jar
+  carrying `Implementation-Version` at all — on 2026.2 it is folded into `lib/util-8.jar`, which has
+  no manifest, and the version is only readable by decompiling `kotlin.KotlinVersionCurrentValue`.
+  Then run the full suite against it: 2026.2.2 was green at the same count with no source change.
+- **`./gradlew printProductsReleases` lists what the build asks it to list.** It is configured here
+  for the RELEASE and EAP channels; with EAP alone it once reported a 262 build *older* than the one
+  being built against, which reads as "you are up to date" and is not. For what is actually
+  released, `https://data.services.jetbrains.com/products/releases?code=PY&type=release&latest=false`
+  gives version, build number and date.
 - **Logged errors are test failures.** `TestLoggerFactory` promotes anything logged at error level to
   a failed scenario, so one benign platform log can fail hundreds of unrelated tests. When triaging a
   wall of failures, group by exception message first — it is usually one cause, not many.

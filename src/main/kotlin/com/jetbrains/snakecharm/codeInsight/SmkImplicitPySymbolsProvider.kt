@@ -934,7 +934,15 @@ private class ImplicitPySymbolsCacheImpl(
 
     override operator fun get(scope: SmkCodeInsightScope) = validElements(scope2Symbols[scope] ?: emptyList())
 
-    override fun hasDeadPsi() = scope2Symbols.values.any { symbols -> symbols.any { !it.psiDeclaration.isValid } }
+    // Both halves of the cache have to be checked: [get] filters out dead symbols and schedules an
+    // update on the way out, but [getSynthetic] hands its lookup elements over unfiltered, so nothing
+    // else would ever notice that the PSI behind them died and completion would keep rendering and
+    // inserting invalid elements. In practice both come from the same library roots and die together,
+    // which is what makes a one-sided check look sufficient.
+    override fun hasDeadPsi() =
+        scope2Symbols.values.any { symbols -> symbols.any { !it.psiDeclaration.isValid } }
+                || scope2SyntheticSymbols.values.any { lookups -> lookups.any { it.psiElement?.isValid == false } }
+
     override fun getSynthetic(scope: SmkCodeInsightScope) = scope2SyntheticSymbols[scope] ?: emptyList()
 
     private fun validElements(elements: List<ImplicitPySymbol>): List<ImplicitPySymbol> {
