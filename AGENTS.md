@@ -15,14 +15,17 @@ than defining a language from scratch.
 
 ## Build & test
 
-The Gradle build uses a **JDK 21 toolchain** (`javaVersion` in `gradle.properties`) and the Gradle
-version pinned there (`gradleVersion`). **Launch Gradle itself with JDK 21**, not just as an
-available toolchain — the pinned Gradle can crash under a much newer JVM with a cryptic error
-(Gradle 8.x on JDK 24 fails with `Type T not present`). Set `JAVA_HOME` to a JDK 21 before building
-from the CLI and **verify it** with `"$JAVA_HOME/bin/java" -version`: on macOS
-`/usr/libexec/java_home -v 21` treats 21 as a *minimum*, so with no JDK 21 installed it returns a
-newer JDK, exits 0, and you get the Gradle crash above with no hint why. Use a jenv/asdf/SDKMAN path
-(`jenv prefix 21`) or an explicit install path.
+The Gradle build uses the JDK toolchain `javaVersion` names in `gradle.properties` — **25 on this
+branch**, and `.java-version` in the repo root carries the same number — plus the Gradle version
+pinned there (`gradleVersion`). **Launch Gradle itself on that JDK**, not merely as an available
+toolchain, because the window is bounded at both ends: too new and the pinned Gradle crashes with a
+cryptic error (Gradle 8.x on JDK 24 fails with `Type T not present`), too old and `instrumentCode`
+dies loading platform classes (2026.2 emits Java 25, so a JDK 21 daemon gets
+`UnsupportedClassVersionError: … class file version 69.0`). Set `JAVA_HOME` before building from the
+CLI and **verify it** with `"$JAVA_HOME/bin/java" -version`: on macOS `/usr/libexec/java_home -v 25`
+treats 25 as a *minimum*, so it can hand back something newer, exit 0, and leave you with one of
+those two errors and no hint why. Use a jenv/asdf/SDKMAN path (`jenv prefix 25`) or an explicit
+install path.
 
 ```shell
 ./gradlew buildPlugin      # -> build/distributions/snakecharm-*.zip
@@ -261,9 +264,8 @@ the entry class for any feature is to grep that file.
   `instrumentCode` runs inside the Gradle daemon and loads platform classes, so on 2026.2 a daemon
   launched on JDK 21 dies with `UnsupportedClassVersionError: … class file version 69.0`, however
   correctly `-Dorg.gradle.java.installations.paths` points at a 25. Set `JAVA_HOME` to the platform's
-  own baseline (21 for 2026.1, 25 for 2026.2), which is the opposite of the "launch Gradle with JDK
-  21" rule above — that rule is about the *pinned Gradle version*, and it stops applying once the
-  platform needs a newer JVM than the Gradle it ships with can be launched under. Gradle also will not
+  own baseline (21 for 2026.1, 25 for 2026.2) — that is the floor under the window described at the
+  top of this file, and on a bump it moves before the pinned Gradle's ceiling does. Gradle also will not
   auto-detect a jenv-managed JDK, so pass the path explicitly; and the **`intelliJPlatform`
   gradle-plugin version** decides whether the Python
   plugin's v2 content modules load *in tests* at all (2.16.0 → 2.18.1 took one port from 3361 failing
