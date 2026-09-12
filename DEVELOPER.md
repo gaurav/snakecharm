@@ -27,9 +27,9 @@
 
 **Command-line build & test (no IDE required):**
 
-The Gradle build uses the JDK toolchain `javaVersion` names in `gradle.properties` — **25 on this
-branch** — and the Gradle version pinned there (`gradleVersion`). Make sure that JDK is installed
-and visible to Gradle before building from the command line.
+The Gradle build uses the JDK toolchain `javaVersion` names in `gradle.properties` — the same number
+`.java-version` in the repo root carries — and the Gradle version pinned there (`gradleVersion`).
+Make sure that JDK is installed and visible to Gradle before building from the command line.
 
 **If you use jenv, `.java-version` in the repo root already does this** — it selects the
 JDK for you as soon as you `cd` here, so you only need that JDK installed. The version it names
@@ -41,7 +41,7 @@ Gradle failure described below. Everyone else sets `JAVA_HOME` by hand:
 
 ```shell
 # Read the version this branch needs rather than hardcoding it; .java-version tracks `javaVersion`
-JDK=$(cat .java-version)                # 25 on this branch, 21 on 2026.1
+JDK=$(cat .java-version)
 
 # macOS (Homebrew): install it
 brew install openjdk@$JDK
@@ -154,7 +154,7 @@ one.
 `PORTING.md` records the previous ports release by release — what broke, why, and how it was fixed
 — which is usually the fastest way to see what a bump costs before starting one.
 
-* Inspect libs version in `gradle/libs.versions.toml`, especially `intelliJPlatform` and `kotlin` version. Also `javaVersion` and `gradleVersion` in `gradle.properties`, and `.java-version` in the repo root (the jenv pin — asdf honours it only with `legacy_version_file = yes` — which has to move with `javaVersion` or jenv users silently keep building on the old JDK). The JDK number is also quoted in prose in two places that nothing checks — the quickstart above and `AGENTS.md` → Build & test — and both said 21 for the whole of the 2026.2 port while `javaVersion` said 25
+* Inspect libs version in `gradle/libs.versions.toml`, especially `intelliJPlatform` and `kotlin` version. Also `javaVersion` and `gradleVersion` in `gradle.properties`, and `.java-version` in the repo root (the jenv pin — asdf honours it only with `legacy_version_file = yes` — which has to move with `javaVersion` or jenv users silently keep building on the old JDK). Those two files are the only place the number lives: the prose in the quickstart above and in `AGENTS.md` → Build & test deliberately names no version, because when it did, both said 21 for the whole of the 2026.2 port while `javaVersion` said 25 — keep it that way
   * See [GitHub:intellij-platform-gradle-plugin](https://github.com/JetBrains/intellij-platform-gradle-plugin) documentation and [GitHub:intellij-platform-plugin-template](https://github.com/JetBrains/intellij-platform-plugin-template) as plugin example
   * `intelliJPlatform` is intellij-platform-gradle-plugin version, not Intellij Platform itself
   * `qodana` update as well
