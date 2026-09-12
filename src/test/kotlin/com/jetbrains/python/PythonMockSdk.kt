@@ -47,8 +47,11 @@ object PythonMockSdk {
         sdkNameSuffix: String = "",
         vararg additionalRoots: VirtualFile
     ): Sdk {
-        // Done here because this is the one point every test path funnels through: the cucumber glue
-        // calls it directly, and SnakemakeTestCase reaches it via `PyLightProjectDescriptor.getSdk()`.
+        // Make the Python helpers-locator extension point usable: creating the SDK below triggers
+        // PyTypeShed's lazy init, which goes through that EP, and under the Gradle test sandbox the EP
+        // either crashes (2026.1) or is missing outright (2026.2) -- failing the whole suite. Done here
+        // because this is the one point every test path funnels through: the cucumber glue calls it
+        // directly, and SnakemakeTestCase reaches it via `PyLightProjectDescriptor.getSdk()`.
         SmkTestPythonHelpersLocatorFix.configurePythonHelpersLocator()
         return create(
             "Mock ${PyNames.PYTHON_SDK_ID_NAME} ${level.toPythonVersion()}$sdkNameSuffix",
