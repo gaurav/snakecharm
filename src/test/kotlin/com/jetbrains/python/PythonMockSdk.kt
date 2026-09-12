@@ -47,8 +47,11 @@ object PythonMockSdk {
         sdkNameSuffix: String = "",
         vararg additionalRoots: VirtualFile
     ): Sdk {
-        // Done here because this is the one point every test path funnels through: the cucumber glue
-        // calls it directly, and SnakemakeTestCase reaches it via `PyLightProjectDescriptor.getSdk()`.
+        // Unregister the Pro Python helpers locator: creating the SDK below triggers PyTypeShed's
+        // lazy init, which walks every registered locator, and the Pro one throws under the Gradle
+        // test sandbox -- failing the whole suite. Done here because this is the one point every
+        // test path funnels through: the cucumber glue calls it directly, and SnakemakeTestCase
+        // reaches it via `PyLightProjectDescriptor.getSdk()`.
         SmkTestPythonHelpersLocatorFix.removeCrashingProHelpersLocator()
         return create(
             "Mock ${PyNames.PYTHON_SDK_ID_NAME} ${level.toPythonVersion()}$sdkNameSuffix",
