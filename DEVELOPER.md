@@ -27,9 +27,9 @@
 
 **Command-line build & test (no IDE required):**
 
-The Gradle build uses a **JDK 21 toolchain** (`javaVersion` in `gradle.properties`) and the
-Gradle version pinned in `gradle.properties` (`gradleVersion`). Make sure a JDK 21 is
-installed and visible to Gradle before building from the command line.
+The Gradle build uses the JDK toolchain `javaVersion` names in `gradle.properties` — the same number
+`.java-version` in the repo root carries — and the Gradle version pinned there (`gradleVersion`).
+Make sure that JDK is installed and visible to Gradle before building from the command line.
 
 **If you use jenv, `.java-version` in the repo root already does this** — it selects the
 JDK for you as soon as you `cd` here, so you only need that JDK installed. The version it names
@@ -40,15 +40,19 @@ only `.tool-versions`, silently leaves your global JDK active, and you land in e
 Gradle failure described below. Everyone else sets `JAVA_HOME` by hand:
 
 ```shell
-# macOS (Homebrew): install a JDK 21
-brew install openjdk@21
+# Read the version this branch needs rather than hardcoding it; .java-version tracks `javaVersion`
+JDK=$(cat .java-version)
 
-# Point Gradle at it for this build. Use a path that pins 21 exactly -- jenv/asdf/SDKMAN, or the
-# install path itself. Do NOT use `/usr/libexec/java_home -v 21`: it treats 21 as a *minimum*, so
-# on a machine without a JDK 21 it returns a newer JDK and exits 0, and the pinned Gradle then
-# crashes with a cryptic `Type T not present`.
-export JAVA_HOME=$(jenv prefix 21)      # or e.g. /opt/homebrew/opt/openjdk@21
-"$JAVA_HOME/bin/java" -version          # verify it really says 21
+# macOS (Homebrew): install it
+brew install openjdk@$JDK
+
+# Point Gradle at it for this build. Use a path that pins that version exactly -- jenv/asdf/SDKMAN,
+# or the install path itself. Do NOT use `/usr/libexec/java_home -v $JDK`: it treats the version as
+# a *minimum*, so on a machine without it you get a newer JDK and exit 0 -- and then a failure that
+# names neither the JDK nor the version (`Type T not present` from the pinned Gradle if it is too
+# new, `UnsupportedClassVersionError` out of instrumentCode if it is too old).
+export JAVA_HOME=$(jenv prefix $JDK)    # or e.g. /opt/homebrew/opt/openjdk@$JDK
+"$JAVA_HOME/bin/java" -version          # verify it really says $JDK
 
 ./gradlew clean buildPlugin        # builds build/distributions/snakecharm-*.zip
 ./gradlew test                     # runs the JUnit + Cucumber test suite
